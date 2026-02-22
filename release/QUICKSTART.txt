@@ -1,0 +1,43 @@
+VUURWERK v1.2.3 - Quick Start Guide
+
+FLASHING:
+1. Download vuurwerk-v1.2.3.packed.bin from the release/ folder
+2. Turn off your radio
+3. Hold PTT, turn on radio (flashlight LED = bootloader mode)
+4. Connect programming cable (Kenwood 2-pin) to radio and computer
+5. Open Chrome: https://egzumer.github.io/uvtools/
+6. Click "Select firmware file", choose vuurwerk-v1.2.3.packed.bin
+7. Click "Flash firmware", wait ~10 seconds
+8. Disconnect cable, power cycle radio
+9. VUURWERK boot screen appears. Done.
+
+Your channels and settings are preserved. Only the firmware changes.
+Chrome required (Web Serial API). Firefox and Safari won't work.
+
+SHORTCUTS (press F then number key):
+F+0  Cycle modulation (FM/AM/USB)
+F+1  Cycle band (50/144/430/...)
+F+2  Toggle VFO (A/B)
+F+3  Toggle VFO/MR (Frequency/Memory)
+F+4  Cycle squelch level (0-9)
+F+5  Spectrum analyzer
+F+6  Cycle TX power (LOW/MID/HIGH)
+F+7  Toggle bandscope (On/Off)
+F+8  Reverse offset (Normal/Reverse)
+F+9  Calling frequency jump (press again to return)
+F+*  CTCSS/DCS scanner
+
+MENU:
+Press MENU for categorized menu (7 categories)
+Keys 1-7 jump directly to a category
+Long-press MENU for About screen
+
+AUTOMATIC (no action needed):
+TX Soft Start, CTCSS Lead-In, TX Compressor activate on every PTT
+FM Gain Staging, Adaptive Squelch, Signal Classifier run during RX
+Squelch Tail Elimination runs whenever CTCSS is set
+
+See ACCESS_MAP.md for the complete feature access guide.
+See README.md for full documentation.
+
+73 de KC3TFZ

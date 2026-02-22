@@ -1,0 +1,37 @@
+# Build artifacts
+*.o
+*.d
+*.elf
+*.map
+*.lst
+
+# Binary outputs (release binary tracked in release/ folder)
+vuurwerk-*
+!release/vuurwerk-v1.2.3.packed.bin
+
+# Build logs
+*.log
+
+# Windows artifacts
+nul
+Thumbs.db
+desktop.ini
+
+# macOS artifacts
+.DS_Store
+._*
+
+# Editor files
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+*.tmp
+
+# IDE folders
+.vscode/
+.idea/
+
+# Executables in utils
+utils/*.exe
