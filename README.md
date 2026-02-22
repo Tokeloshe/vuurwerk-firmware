@@ -149,6 +149,8 @@ The UV-K5 has been revised multiple times. The newer V2 (PY32F030 processor) and
 
 **How to check which version you have:** Remove the battery and look at the circuit board label underneath. V2 and V3 boards are marked with their revision. If there is no marking, you have a V1 -- that is the one VUURWERK supports.
 
+**If you flashed VUURWERK onto incompatible hardware,** use [K5TOOL](https://github.com/qrp73/K5TOOL) to recover your radio. It supports all UV-K5 hardware versions.
+
 ---
 
 ## Built By
