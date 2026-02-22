@@ -8,6 +8,16 @@ VUURWERK is Afrikaans for *fireworks*.
 
 ---
 
+### **Hardware Compatibility -- UV-K5 V1 Only**
+
+**VUURWERK only supports the original Quansheng UV-K5 V1 hardware, which uses the DP32G030 processor.**
+
+The UV-K5 has been revised multiple times. The newer V2 (PY32F030 processor) and V3 (PY32F071 processor) boards are **not compatible** with this firmware. Flashing VUURWERK onto V2 or V3 hardware will result in a radio that does not boot. This will not permanently damage the radio, but you will need recovery firmware for your specific hardware version to restore it.
+
+**How to check which version you have:** Remove the battery and look at the circuit board label underneath. V2 and V3 boards are marked with their revision. If there is no marking, you have a V1 -- that is the one VUURWERK supports.
+
+---
+
 ## See It In Action
 
 When you first power on a VUURWERK radio, the boot screen shows the firmware name and version. Then you see the main display:
