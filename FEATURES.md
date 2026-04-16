@@ -235,7 +235,7 @@ Modes implemented in `app/spectrum.c` (modified egzumer/fagci code).
 | 22 | RSSI Bar (S-meter with FM compensation) | ui/main.c | N/A | ENABLE_RSSI_BAR=1 | inherited, enabled v1.0.9.6 |
 | 23 | Context-Aware Status Line | status_line.c/h | status_line.o | app.c:1336-1342 (SetContext + Update 500ms) | v1.0.4 |
 | 24 | Boot Screen (VERSION_STRING) | ui/welcome.c | N/A | Boot sequence | v1.0.0 |
-| 25 | About Screen | ui/vuurwerk_about.c/h | ui/vuurwerk_about.o | app/menu.c:1730 (long-press MENU) | v1.0.4 |
+| 25 | About Screen | ui/vuurwerk_about.c/h | ui/vuurwerk_about.o | Menu > CONFIG > About (MENU_ABOUT in app/menu.c MENU_Key_MENU) | v1.0.4 |
 | 26 | Categorized Menu System (6 visible + UNLOCK) | ui/vuurwerk_menu.c/h | ui/vuurwerk_menu.o | app/main.c:694, app/menu.c (5+ sites) | v1.0.9 |
 | 27 | Activity Log (uptime + RF activity) | activity_log.c/h | activity_log.o | app.c (UpdateUptime 1s, Add on squelch open) | v1.0.4, wired v1.2.3 |
 

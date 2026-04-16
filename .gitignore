@@ -8,6 +8,7 @@
 # Binary outputs (release binary tracked in release/ folder)
 vuurwerk-*
 !release/vuurwerk-v1.2.3.packed.bin
+!release/vuurwerk-v1.2.4.packed.bin
 
 # Build logs
 *.log

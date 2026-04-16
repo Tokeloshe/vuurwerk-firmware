@@ -1443,6 +1443,12 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld)
 	if (bKeyHeld || !bKeyPressed)
 		return;
 
+	if (UI_MENU_GetCurrentMenuId() == MENU_ABOUT) {
+		gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
+		VUURWERK_ABOUT_Show();
+		return;
+	}
+
 	gBeepToPlay           = BEEP_1KHZ_60MS_OPTIONAL;
 	gRequestDisplayScreen = DISPLAY_MENU;
 
@@ -1742,13 +1748,6 @@ void MENU_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 {
 	// --- Category picker navigation ---
 	if (gMenuShowCategoryPicker) {
-		// Long-press MENU at category screen -> show About
-		if (bKeyHeld && bKeyPressed && Key == KEY_MENU) {
-			VUURWERK_ABOUT_Show();
-			gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
-			goto menu_timeout;
-		}
-
 		if (bKeyHeld || !bKeyPressed)
 			goto menu_timeout;
 

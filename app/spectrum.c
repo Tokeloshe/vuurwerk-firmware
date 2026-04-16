@@ -335,14 +335,15 @@ static void DeInitSpectrum() {
   isInitialized = false;
 }
 
-uint8_t GetBWRegValueForScan() {
+uint16_t GetBWRegValueForScan() {
   return scanStepBWRegValues[settings.scanStepIndex];
 }
 
 uint16_t GetRssi() {
-  // SYSTICK_DelayUs(800);
-  // testing autodelay based on Glitch value
+  uint8_t timeout = 50;
   while ((BK4819_ReadRegister(0x63) & 0b11111111) >= 255) {
+    if (--timeout == 0)
+      break;
     SYSTICK_DelayUs(100);
   }
   uint16_t rssi = BK4819_GetRSSI();

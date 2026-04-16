@@ -45,7 +45,7 @@ ON SCREEN
 MENU
   Press MENU for category picker (6 visible + 1 hidden)
   Keys 1-6 jump to category
-  Long-press MENU at picker for About screen
+  About screen: Menu > CONFIG > About
 ```
 
 ---
@@ -117,7 +117,7 @@ Scans for CTCSS/DCS codes on the current frequency. Found in `app/main.c` MAIN_K
 
 ## Menu Items
 
-Press MENU to open the category picker. Press a number key (1-6) to jump directly to a category, or scroll with UP/DOWN and press MENU to enter. Long-press MENU at the category picker to open the About screen.
+Press MENU to open the category picker. Press a number key (1-6) to jump directly to a category, or scroll with UP/DOWN and press MENU to enter. The About screen is available at Menu > CONFIG > About.
 
 All category assignments verified from `ui/vuurwerk_menu.c:43-134`.
 Menu labels verified from `ui/menu.c:41-140`.
@@ -336,7 +336,7 @@ The **Signal Classifier Symbol** (F/N/S/~) appears at the end of the RX status l
 
 | Action | How | Source |
 |--------|-----|--------|
-| **About Screen** | Long-press MENU at category picker | app/menu.c:1745-1748 |
+| **About Screen** | Menu > CONFIG > About | app/menu.c MENU_Key_MENU, ui/vuurwerk_about.c |
 | **Unlock Category** | Hold PTT + upper side button at power-on | Enables gF_LOCK, reveals 7th menu category |
 | **Key Lock** | Long-press F key | app/generic.c, GENERIC_Key_F() |
 

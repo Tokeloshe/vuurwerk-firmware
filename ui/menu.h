@@ -124,7 +124,8 @@ enum
 	MENU_F2LONG,
 	MENU_MLONG,
 	MENU_BATTYP,
-	MENU_SCANWATCH    // VUURWERK: Scan+Watch + VFO Split
+	MENU_SCANWATCH,   // VUURWERK: Scan+Watch + VFO Split
+	MENU_ABOUT        // VUURWERK: About screen launcher
 };
 
 extern const uint8_t FIRST_HIDDEN_MENU_ITEM;

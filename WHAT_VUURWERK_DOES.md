@@ -105,7 +105,7 @@ The display shows confidence: bins with no voice get just a floor dot. Low-confi
 **What it does:** Shows the VUURWERK name and version when the radio powers on.
 
 ### 25. About Screen
-**What it does:** Long-press MENU at the category picker to see firmware info and feature highlights.
+**What it does:** Navigate to Menu > CONFIG > About to see firmware info and feature highlights.
 
 ### 26. Categorized Menu
 **What it does:** The stock radio has 60+ menu items in one flat list. VUURWERK organizes them into 7 categories: Receive, Tone, Transmit, Scan, Channel, Config, and a hidden Unlock category. You scroll through categories first, then items within. Finding settings takes seconds instead of minutes.

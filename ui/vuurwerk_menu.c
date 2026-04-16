@@ -124,6 +124,7 @@ uint8_t VUURWERK_MENU_GetCategoryForMenuId(uint8_t menu_id)
 		case MENU_MLONG:
 		case MENU_VOL:          // was SYSTEM
 		case MENU_SAVE:         // was SYSTEM
+		case MENU_ABOUT:        // VUURWERK About screen
 			return MCAT_CONFIG;
 
 		// UNLOCK (hidden items)

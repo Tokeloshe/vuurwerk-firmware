@@ -1,6 +1,20 @@
 # VUURWERK Changelog
 
-## v1.2.3 (2026-02-21): Current Release
+## v1.2.4 (April 2026)
+
+Bugfix release addressing three community-reported issues.
+
+### Fixed
+
+- **Spectrum analyzer freeze on entry.** The `scanStepBWRegValues[]` array was missing three entries for the larger scan steps (25 kHz, 50 kHz, 100 kHz), causing an out-of-bounds read on entry with the default scan step. Combined with a no-timeout wait loop in `GetRssi()`, this hung the radio requiring a battery pull. Fixed the array size, added a 50-iteration timeout to `GetRssi()`, and corrected the return type of `GetBWRegValueForScan()` from uint8_t to uint16_t (a latent bug that was silently truncating filter bandwidth register values). Thanks to JoseSoler (https://github.com/JoseSoler) for the detailed root-cause analysis and exact code fix in issue #5.
+
+- **Channel name drift in Dual Watch.** After 4+ hours of Dual Watch operation, the displayed channel name would switch to Channel 10's name on both VFOs, while RX continued correctly on the saved channels. A defensive guard has been added to the display path with a trip counter visible on the About screen. Root cause investigation continues and user reports of trip counts will inform the v1.2.5 fix. Thanks to rieschrispy (https://github.com/rieschrispy) for the detailed reproduction steps in issue #4.
+
+- **About screen now accessible from the CONFIG menu.** Previously About was hidden behind a long-press gesture in the category picker that wasn't discoverable. About is now a regular menu item under CONFIG: scroll to it and press MENU. Thanks to ErikS-web (https://github.com/ErikS-web) for the feedback in issue #1.
+
+---
+
+## v1.2.3 (2026-02-21)
 
 ### Fixes
 - Fixed: Activity Log now records RF activity (frequency, RSSI, tone, duration) on every squelch open

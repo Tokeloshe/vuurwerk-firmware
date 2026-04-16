@@ -17,6 +17,8 @@
 #ifndef UI_MAIN_H
 #define UI_MAIN_H
 
+#include <stdint.h>
+
 enum center_line_t {
 	CENTER_LINE_NONE = 0,
 	CENTER_LINE_IN_USE,
@@ -38,6 +40,7 @@ typedef enum center_line_t center_line_t;
 
 extern center_line_t center_line;
 extern const int8_t dBmCorrTable[7];
+extern uint16_t gScreenChannelGuardTrips;
 
 void UI_DisplayAudioBar(void);
 void UI_MAIN_TimeSlice500ms(void);

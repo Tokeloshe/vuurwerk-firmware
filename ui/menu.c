@@ -125,6 +125,7 @@ const t_menu_item MenuList[] =
 	{"RxMode", VOICE_ID_DUAL_STANDBY,                  MENU_TDR           },
 	{"Sql",    VOICE_ID_SQUELCH,                       MENU_SQL           },
 	{"ScnWch", VOICE_ID_INVALID,                       MENU_SCANWATCH     },
+	{"About",  VOICE_ID_INVALID,                       MENU_ABOUT         }, // VUURWERK About screen (CONFIG category)
 
 	// hidden menu items from here on
 	// enabled if pressing both the PTT and upper side button at power-on

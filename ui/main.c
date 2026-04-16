@@ -43,8 +43,11 @@
 #include "gain_staging.h"
 #include "app/scanner.h"
 #include "frequencies.h"
+#include "driver/uart.h"
 
 center_line_t center_line = CENTER_LINE_NONE;
+
+uint16_t gScreenChannelGuardTrips = 0;
 
 const int8_t dBmCorrTable[7] = {
 			-15, // band 1
@@ -539,6 +542,18 @@ void UI_DisplayMain(void)
 				// TODO:  // find somewhere else to put the symbol
 #endif
 
+				uint8_t displayCh = gEeprom.ScreenChannel[vfo_num];
+				if (!RADIO_CheckValidChannel(displayCh, false, 0)) {
+					displayCh = gEeprom.MrChannel[vfo_num];
+					if (gScreenChannelGuardTrips < 0xFFFF) {
+						if (gScreenChannelGuardTrips == 0) {
+							static const char msg[] = "GUARD: ScreenChannel invalid, falling back to MrChannel\r\n";
+							UART_LogSend(msg, sizeof(msg) - 1);
+						}
+						gScreenChannelGuardTrips++;
+					}
+				}
+
 				switch (gEeprom.CHANNEL_DISPLAY_MODE)
 				{
 					case MDF_FREQUENCY:	// show the channel frequency
@@ -561,17 +576,17 @@ void UI_DisplayMain(void)
 						break;
 
 					case MDF_CHANNEL:	// show the channel number
-						sprintf(String, "CH-%03u", gEeprom.ScreenChannel[vfo_num] + 1);
+						sprintf(String, "CH-%03u", displayCh + 1);
 						UI_PrintString(String, 32, 0, line, 8);
 						break;
 
 					case MDF_NAME:		// show the channel name
 					case MDF_NAME_FREQ:	// show the channel name and frequency
 
-						SETTINGS_FetchChannelName(String, gEeprom.ScreenChannel[vfo_num]);
+						SETTINGS_FetchChannelName(String, displayCh);
 						if (String[0] == 0)
 						{	// no channel name, show the channel number instead
-							sprintf(String, "CH-%03u", gEeprom.ScreenChannel[vfo_num] + 1);
+							sprintf(String, "CH-%03u", displayCh + 1);
 						}
 
 						if (gEeprom.CHANNEL_DISPLAY_MODE == MDF_NAME) {

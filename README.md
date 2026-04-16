@@ -4,7 +4,7 @@
 
 VUURWERK is Afrikaans for *fireworks*.
 
-**v1.2.3** | 59,164 bytes | 27 active features | Zero warnings | GPL v3
+**v1.2.4** | 60,312 bytes | 27 active features | Zero warnings | GPL v3
 
 ---
 
@@ -90,7 +90,7 @@ That trailing "F" is the signal classifier telling you this is a fast-rise FM si
 
 Stock firmware is open-loop: you set fixed values and hope they work. VUURWERK is closed-loop: the radio measures what's actually happening (noise floor, signal strength, audio level, signal type) and adjusts itself in real time. It's the difference between driving with your eyes closed holding the wheel straight, and actually watching the road and steering.
 
-**More features in fewer bytes.** VUURWERK v1.2.3 compiles to 59,164 bytes of flash with 2,276 bytes free (3.71% headroom). Every feature fits in the same 60KB that stock firmware uses for less.
+**More features in fewer bytes.** VUURWERK v1.2.4 compiles to 60,312 bytes of flash with 1,128 bytes free (1.84% headroom). Every feature fits in the same 60KB that stock firmware uses for less.
 
 **Original innovations.** VUURWERK introduces concepts that don't exist in any other UV-K5 firmware: intelligence-based squelch with voice probability scoring, voice-seeking spectrum analysis, FM adaptive gain staging, universal squelch tail elimination, real-time TX audio compression, and more. These aren't ports or adaptations of existing features. See [LICENSE](LICENSE) for the full original contributions list and [FEATURES.md](FEATURES.md) for the technical deep dive.
 
@@ -98,12 +98,12 @@ Stock firmware is open-loop: you set fixed values and hope they work. VUURWERK i
 
 ## Flash It In 60 Seconds
 
-1. Download [`vuurwerk-v1.2.3.packed.bin`](release/vuurwerk-v1.2.3.packed.bin) from the `release/` folder in this repo
+1. Download [`vuurwerk-v1.2.4.packed.bin`](release/vuurwerk-v1.2.4.packed.bin) from the `release/` folder in this repo
 2. Turn off your radio
 3. Hold PTT, then turn on the radio (flashlight LED confirms bootloader mode)
 4. Connect your programming cable to the radio and your computer
 5. Open the flasher in Chrome: https://egzumer.github.io/uvtools/
-6. Click "Select firmware file" and choose `vuurwerk-v1.2.3.packed.bin`
+6. Click "Select firmware file" and choose `vuurwerk-v1.2.4.packed.bin`
 7. Click "Flash firmware" and wait about 10 seconds
 8. Disconnect the cable and power cycle the radio
 
@@ -134,7 +134,7 @@ ON SCREEN                            Squelch Tail Elimination
   Status bar: Q meter, battery       S-Meter Compensation
   Center: Bandscope / Toast
   Bottom: Context status line      MENU: 7 categories, number keys
-  RX line: S-level dBm Q F/N/S/~  Long-press MENU: About screen
+  RX line: S-level dBm Q F/N/S/~  About: Menu > CONFIG > About
 ```
 
 See [ACCESS_MAP.md](ACCESS_MAP.md) for the complete feature access guide.
