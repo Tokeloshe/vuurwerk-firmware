@@ -8,6 +8,11 @@ VUURWERK is Afrikaans for *fireworks*.
 
 ---
 
+## See It In Action
+
+When you first power on a VUURWERK radio, the boot screen shows the firmware name and version. Then you see the main display:
+
+```
 +-------------------------------+
 | [Q===]          [F]  [BATT██] |  Status bar: signal quality, lock/F key, battery
 |                               |
@@ -146,7 +151,7 @@ See [ACCESS_MAP.md](ACCESS_MAP.md) for the complete feature access guide.
 
 ---
 
-### **Hardware Compatibility -- UV-K5 V1 Only**
+## Hardware Compatibility -- UV-K5 V1 Only
 
 **VUURWERK only supports the original Quansheng UV-K5 V1 hardware, which uses the DP32G030 processor.**
 
@@ -180,11 +185,6 @@ See [LICENSE](LICENSE) for full attribution and the complete list of VUURWERK-or
 
 ---
 
-*Dedicated to George Thomas Honiball, ZS6NE (Silent Key). He is a silent key now, but not in and through me.*
-
-*VUURWERK (Afrikaans: fireworks) -- because your radio should light up.*
----
-
 ## License
 
 VUURWERK is dual-licensed.
@@ -199,8 +199,6 @@ Stock upstream code (Egzumer, DualTachyon, OneOfEleven, fagci) remains under its
 
 ---
 
-## See It In Action
+*Dedicated to George Thomas Honiball, ZS6NE (Silent Key). He is a silent key now, but not in and through me.*
 
-When you first power on a VUURWERK radio, the boot screen shows the firmware name and version. Then you see the main display:
-
-```
+*VUURWERK (Afrikaans: fireworks) -- because your radio should light up.*
