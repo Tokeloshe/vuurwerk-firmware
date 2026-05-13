@@ -8,25 +8,6 @@ VUURWERK is Afrikaans for *fireworks*.
 
 ---
 
-## License
-
-VUURWERK is dual-licensed.
-
-**The complete VUURWERK firmware** is distributed under the GNU General Public License v3, consistent with its upstream Egzumer / DualTachyon parent. You may flash it, fork it, modify it, and redistribute the complete firmware under GPL v3 terms.
-
-**VUURWERK-original algorithms and modules** (listed in the [LICENSE](./LICENSE) contributions registry) are additionally protected by a commercial-license requirement for any use outside the complete VUURWERK firmware. Extracting a VUURWERK-original file, porting a VUURWERK-original algorithm to another platform, or incorporating VUURWERK-original code into a separate project requires a commercial license obtained in writing from James Honiball (KC3TFZ).
-
-Commercial licensing inquiries: jhoniball4@gmail.com
-
-Stock upstream code (Egzumer, DualTachyon, OneOfEleven, fagci) remains under its original license terms as marked in each file.
-
----
-
-## See It In Action
-
-When you first power on a VUURWERK radio, the boot screen shows the firmware name and version. Then you see the main display:
-
-```
 +-------------------------------+
 | [Q===]          [F]  [BATT██] |  Status bar: signal quality, lock/F key, battery
 |                               |
@@ -202,3 +183,24 @@ See [LICENSE](LICENSE) for full attribution and the complete list of VUURWERK-or
 *Dedicated to George Thomas Honiball, ZS6NE (Silent Key). He is a silent key now, but not in and through me.*
 
 *VUURWERK (Afrikaans: fireworks) -- because your radio should light up.*
+---
+
+## License
+
+VUURWERK is dual-licensed.
+
+**The complete VUURWERK firmware** is distributed under the GNU General Public License v3, consistent with its upstream Egzumer / DualTachyon parent. You may flash it, fork it, modify it, and redistribute the complete firmware under GPL v3 terms.
+
+**VUURWERK-original algorithms and modules** (listed in the [LICENSE](./LICENSE) contributions registry) are additionally protected by a commercial-license requirement for any use outside the complete VUURWERK firmware. Extracting a VUURWERK-original file, porting a VUURWERK-original algorithm to another platform, or incorporating VUURWERK-original code into a separate project requires a commercial license obtained in writing from James Honiball (KC3TFZ).
+
+Commercial licensing inquiries: jhoniball4@gmail.com
+
+Stock upstream code (Egzumer, DualTachyon, OneOfEleven, fagci) remains under its original license terms as marked in each file.
+
+---
+
+## See It In Action
+
+When you first power on a VUURWERK radio, the boot screen shows the firmware name and version. Then you see the main display:
+
+```
