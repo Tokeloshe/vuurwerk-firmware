@@ -1,13 +1,15 @@
 /* Copyright (c) 2026 James Honiball (KC3TFZ)
- * 
+ *
  * This file is part of VUURWERK and is dual-licensed:
  *   1. GPL v3 (when distributed as part of the VUURWERK firmware)
  *   2. Commercial license available from the author
- * 
- * You may not extract, repackage, or redistribute this file 
- * independently under any license other than GPL v3 as part 
+ *
+ * You may not extract, repackage, or redistribute this file
+ * independently under any license other than GPL v3 as part
  * of the complete VUURWERK firmware, without written permission
  * from the author.
+ *
+ * Commercial licensing inquiries: jhoniball4@gmail.com
  */
 
 #include "smart_squelch.h"
@@ -32,7 +34,7 @@ static inline uint16_t ewma_update(uint16_t old_val, uint16_t new_sample)
 	return old_val + (((int16_t)(new_sample - old_val)) >> 3);
 }
 
-// Core voice probability scoring — integer only
+// Core voice probability scoring -- integer only
 static uint8_t compute_voice_probability(
 	uint16_t rssi, uint16_t noise, uint16_t glitch, int16_t noise_floor)
 {
@@ -81,6 +83,29 @@ void SMART_SQUELCH_Update(void)
 	    gCurrentFunction != FUNCTION_MONITOR)
 		return;
 
+	// Function-local state: hoisted so the freq-change guard
+	// below can reset all of it in one block.
+	static uint8_t  voice_hold     = 0;
+	static int8_t   prev_adj       = 127;
+	static uint32_t last_frequency = 0;
+
+	const uint8_t  vfo  = gEeprom.RX_VFO;
+	const uint32_t freq = gEeprom.VfoInfo[vfo].pRX->Frequency;
+
+	// Discard prior-channel state on frequency change so squelch
+	// decisions for the new channel are not biased by ~200ms of
+	// hangover or ~80ms of EWMA bleed from a different signal source.
+	// Pattern matches gain_staging.c:64-72 and signal_quality.c.
+	if (freq != last_frequency) {
+		last_frequency = freq;
+		voice_hold = 0;
+		prev_adj   = 127;
+		gSmartSquelch.rssi_smooth   = 0;
+		gSmartSquelch.noise_smooth  = 127;
+		gSmartSquelch.glitch_smooth = 255;
+		gSmartSquelch.voice_prob    = 0;
+	}
+
 	// Read all three BK4819 indicators
 	const uint16_t rssi_raw   = BK4819_GetRSSI();
 	const uint16_t noise_raw  = BK4819_GetExNoiceIndicator();
@@ -92,7 +117,6 @@ void SMART_SQUELCH_Update(void)
 	gSmartSquelch.glitch_smooth = ewma_update(gSmartSquelch.glitch_smooth, glitch_raw);
 
 	// Get adaptive noise floor from histogram module
-	const uint8_t vfo = gEeprom.RX_VFO;
 	if (gRSSI_Histogram[vfo].valid)
 		gSmartSquelch.noise_floor = (int16_t)(gRSSI_Histogram[vfo].noise_floor_dbm + 160) * 2;
 	// Convert dBm back to raw RSSI units: raw = (dBm + 160) * 2
@@ -105,7 +129,6 @@ void SMART_SQUELCH_Update(void)
 		gSmartSquelch.noise_floor);
 
 	// Hangover: hold voice_prob >= 50 for 200ms after last voice
-	static uint8_t voice_hold = 0;
 	if (gSmartSquelch.voice_prob >= 50)
 		voice_hold = 20;           // 200ms at 10ms tick
 	else if (voice_hold > 0) {
@@ -115,7 +138,6 @@ void SMART_SQUELCH_Update(void)
 
 	// Dynamic squelch adjustment: only write REG_78 when value changes
 	const int8_t adj = SMART_SQUELCH_GetAdjustment();
-	static int8_t prev_adj = 127;
 	if (adj != prev_adj) {
 		prev_adj = adj;
 		// Only LOOSEN squelch (negative adj) dynamically.

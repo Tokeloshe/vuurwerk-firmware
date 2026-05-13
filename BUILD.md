@@ -1,4 +1,4 @@
-# VUURWERK v1.0.0 - Build Instructions
+# VUURWERK v1.2.7 - Build Instructions
 
 ## Prerequisites
 

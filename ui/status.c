@@ -86,7 +86,12 @@ void UI_DisplayStatus()
 			if (SCANWATCH_IsActive()) {
 				s = "S+W";  // Scan+Watch active
 			}
-			else if (IS_MR_CHANNEL(gNextMrChannel) && !SCANNER_IsScanning()) {
+			// === VUURWERK v1.2.7 CSS scan glyph ===
+			else if (SCANNER_IsScanning()) {
+				s = "Cs";  // CSS (CTCSS/DCS) scan distinguished from channel scan
+			}
+			// === END VUURWERK v1.2.7 ===
+			else if (IS_MR_CHANNEL(gNextMrChannel)) {
 				switch(gEeprom.SCAN_LIST_DEFAULT) {
 					case 0: s = "1"; break;
 					case 1: s = "2"; break;

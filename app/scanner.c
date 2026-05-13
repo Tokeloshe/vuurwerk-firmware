@@ -21,10 +21,12 @@
 #include "dtmf.h"
 #include "audio.h"
 #include "driver/bk4819.h"
+#include "driver/system.h"
 #include "frequencies.h"
 #include "misc.h"
 #include "radio.h"
 #include "settings.h"
+#include "toast.h"
 #include "ui/inputbox.h"
 #include "ui/ui.h"
 
@@ -328,6 +330,22 @@ void SCANNER_Start(bool singleFreq)
 #endif
 
 	if (gScanSingleFrequency) {
+		// === VUURWERK v1.2.7 Pre-flight RSSI gate ===
+		// Park the receiver on the current frequency for 50 ms to let
+		// AGC settle, then read raw RSSI. Below threshold raw 100
+		// (~-110 dBm) means the operator parked on dead air; abort
+		// with NO SIGNAL toast + 500 Hz double-beep so they can move
+		// to a real carrier instead of waiting out the 30 s timeout.
+		SYSTEM_DelayMs(50);
+		if (BK4819_GetRSSI() < 100) {
+			TOAST_Show("NO SIGNAL");
+			gScanCssState  = SCAN_CSS_STATE_FAILED;
+			gBeepToPlay    = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
+			gUpdateStatus  = true;
+			return;
+		}
+		// === end VUURWERK ===
+
 		gScanCssState  = SCAN_CSS_STATE_SCANNING;
 		gScanFrequency = gRxVfo->pRX->Frequency;
 		stepSetting   = gRxVfo->STEP_SETTING;
@@ -448,34 +466,26 @@ void SCANNER_TimeSlice10ms(void)
 
 			BK4819_Disable();
 
+			// === VUURWERK v1.2.7 CDCSS/CTCSS arm merge
+			// (CTCSS dropped from 2-confirmation to 1-confirmation
+			// to match DCS; the two arms then collapse to one block) ===
+			uint8_t Code;
+			DCS_CodeType_t CodeType;
 			if (scanResult == BK4819_CSS_RESULT_CDCSS) {
-				const uint8_t Code = DCS_GetCdcssCode(cdcssFreq);
-				if (Code != 0xFF)
-				{
-					gScanCssResultCode = Code;
-					gScanCssResultType = CODE_TYPE_DIGITAL;
-					gScanCssState      = SCAN_CSS_STATE_FOUND;
-					gScanUseCssResult  = true;
-					gUpdateStatus      = true;
-				}
+				Code     = DCS_GetCdcssCode(cdcssFreq);
+				CodeType = CODE_TYPE_DIGITAL;
+			} else {
+				Code     = DCS_GetCtcssCode(ctcssFreq);
+				CodeType = CODE_TYPE_CONTINUOUS_TONE;
 			}
-			else if (scanResult == BK4819_CSS_RESULT_CTCSS) {
-				const uint8_t Code = DCS_GetCtcssCode(ctcssFreq);
-				if (Code != 0xFF) {
-					if (Code == gScanCssResultCode && gScanCssResultType == CODE_TYPE_CONTINUOUS_TONE) {
-						if (++scanHitCount >= 2) {
-							gScanCssState     = SCAN_CSS_STATE_FOUND;
-							gScanUseCssResult = true;
-							gUpdateStatus     = true;
-						}
-					}
-					else
-						scanHitCount = 0;
-
-					gScanCssResultType = CODE_TYPE_CONTINUOUS_TONE;
-					gScanCssResultCode = Code;
-				}
+			if (Code != 0xFF) {
+				gScanCssResultCode = Code;
+				gScanCssResultType = CodeType;
+				gScanCssState      = SCAN_CSS_STATE_FOUND;
+				gScanUseCssResult  = true;
+				gUpdateStatus      = true;
 			}
+			// === end VUURWERK ===
 
 			if (gScanCssState < SCAN_CSS_STATE_FOUND) { // scanning or off
 				BK4819_SetScanFrequency(gScanFrequency);

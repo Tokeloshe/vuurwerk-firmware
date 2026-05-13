@@ -1,13 +1,15 @@
 /* Copyright (c) 2026 James Honiball (KC3TFZ)
- * 
+ *
  * This file is part of VUURWERK and is dual-licensed:
  *   1. GPL v3 (when distributed as part of the VUURWERK firmware)
  *   2. Commercial license available from the author
- * 
- * You may not extract, repackage, or redistribute this file 
- * independently under any license other than GPL v3 as part 
+ *
+ * You may not extract, repackage, or redistribute this file
+ * independently under any license other than GPL v3 as part
  * of the complete VUURWERK firmware, without written permission
  * from the author.
+ *
+ * Commercial licensing inquiries: jhoniball4@gmail.com
  */
 
 #include "vuurwerk_menu.h"
@@ -23,21 +25,25 @@ uint8_t  gCategoryItems[MAX_CATEGORY_ITEMS];
 uint8_t  gCategoryItemCount = 0;
 uint8_t  gCategoryItemIdx   = 0;
 
-// Category display names
-static const char * const sCategoryNames[MCAT_COUNT] = {
-	"RECEIVE",
-	"TONE",
-	"TX",
-	"SCAN",
-	"CHANNEL",
-	"CONFIG",
-	"UNLOCK"
+// Per-category last-visited item index. Survives picker round-trips
+// within a power cycle so re-entering a category lands the cursor
+// where the operator left it. Cleared on power-on (BSS zero-init).
+static uint8_t sCategoryLastIdx[MCAT_COUNT];
+
+// Category display names, packed into a single buffer with embedded
+// null terminators. The 7-element offset table replaces a 28-byte
+// pointer table; net data shrink is ~21 bytes plus a small function
+// body delta. Order matches MenuCategory_t enum.
+static const char sCategoryNames[] =
+	"RECEIVE\0TONE\0TX\0SCAN\0CHANNEL\0CONFIG\0UNLOCK";
+static const uint8_t sCategoryNameOffsets[MCAT_COUNT] = {
+	0, 8, 13, 16, 21, 29, 36
 };
 
 const char* VUURWERK_MENU_GetCategoryName(uint8_t cat)
 {
 	if (cat < MCAT_COUNT)
-		return sCategoryNames[cat];
+		return sCategoryNames + sCategoryNameOffsets[cat];
 	return "?";
 }
 
@@ -159,6 +165,16 @@ void VUURWERK_MENU_SelectCategory(uint8_t cat)
 		}
 	}
 
+	// Restore the cursor to where the operator left this category.
+	// CSS-scan re-entry (app/menu.c:107) overrides this afterwards by
+	// scanning gCategoryItems[] for the matched code, which is correct.
+	if (cat < MCAT_COUNT)
+	{
+		uint8_t saved = sCategoryLastIdx[cat];
+		if (saved < gCategoryItemCount)
+			gCategoryItemIdx = saved;
+	}
+
 	VUURWERK_MENU_SyncCursor();
 }
 
@@ -170,9 +186,29 @@ void VUURWERK_MENU_SyncCursor(void)
 
 void VUURWERK_MENU_EnterCategoryPicker(void)
 {
+	// Remember the cursor position inside the category we're leaving
+	// so a later re-entry of the same category restores it.
+	if (gSelectedCategory >= 0 && gSelectedCategory < (int8_t)MCAT_COUNT
+		&& gCategoryItemCount > 0)
+	{
+		sCategoryLastIdx[gSelectedCategory] = gCategoryItemIdx;
+	}
+
 	gMenuShowCategoryPicker = true;
-	gSelectedCategory       = -1;
-	gCategoryPickerCursor   = 0;
+
+	// Park the picker cursor on the just-left category. UNLOCK is
+	// hidden when gF_LOCK is false, so clamp against visible count.
+	if (gSelectedCategory >= 0
+		&& gSelectedCategory < (int8_t)VUURWERK_MENU_GetVisibleCategoryCount())
+	{
+		gCategoryPickerCursor = (uint8_t)gSelectedCategory;
+	}
+	else
+	{
+		gCategoryPickerCursor = 0;
+	}
+
+	gSelectedCategory = -1;
 }
 
 void VUURWERK_MENU_Init(void)

@@ -108,27 +108,193 @@ VUURWERK-original contributions (designed and conceived by James Honiball):
     stability as Excellent, Good, Fair, or Poor for propagation quality
     assessment.
 
+  - Side-Button Toast Feedback and Toast Subsystem Extraction: The
+    Toast Notification System originally introduced for F+key feedback
+    is now driven by a dedicated toast.c/h module and reused for
+    SIDE1, SIDE2, and long-press MENU presses so every shortcut path
+    produces the same 1-second on-screen confirmation. Original
+    implementation of UX-parity toast feedback for side-button paths
+    on the UV-K5 platform; no upstream fork emits any user-visible
+    feedback for side-button shortcut actions.
+
+  - Scan Rate Telemetry: Live channels-per-second readout appended to
+    the SCANNING status line, driven by a 100-tick rolling counter in
+    scan_rate.c that observes CHFRSCANNER_ContinueScanning events.
+    Standard rolling-counter telemetry technique, original
+    implementation for the UV-K5 platform; no upstream fork surfaces
+    scanner throughput to the operator.
+
+  - F-Key UX Hardening: A bundle of three small reliability fixes
+    around the F-key dispatch path. KEY_F long-press emits a
+    "LOCKED"/"UNLOCKED" toast on the keypad-lock gesture, achieving
+    parity with the side-button keylock toast. F+3 (VFO/MR toggle)
+    surfaces "NO CHANNELS" when COMMON_SwitchVFOMode silently no-ops
+    on empty channel memory, replacing the misleading stock "VFO MODE"
+    toast. F+STAR (CSS scanner) is gated to FM mode only and toasts
+    "FM ONLY" in AM/USB to prevent the unbounded scan that would
+    otherwise occur because the BK4819 CTCSS detector populates only
+    in FM. STAR long-hold (scan toggle) gains its own "SCAN ON"/
+    "SCAN OFF" toast. Each gap is original to VUURWERK.
+
+  - Flashlight Auto-Off Watchdog with Battery-Aware Tier: 100 Hz
+    software watchdog in flashlight_watchdog.c that extinguishes the
+    flashlight after 30 minutes of unattended ON or BLINK runtime
+    (10 minutes when gBatteryDisplayLevel <= 2). Mode changes reset
+    the timer so tapping the flashlight key extends the session. The
+    watchdog technique itself is standard; the original VUURWERK
+    contribution is the integration on the UV-K5 platform, the SOS
+    preservation rule, and the battery-aware tiered timeout (30 min
+    normal, 10 min when display level <= 2), which no other UV-K5
+    fork ships.
+
+  - CSS Scan Soft-Timeout Watchdog: Single conditional hook in
+    app/app.c that observes the CSS scanner's gScanProgressIndicator
+    after SCANNER_TimeSlice500ms and forces a transition to
+    SCAN_CSS_STATE_FAILED with an audible double-beep at the
+    60-second mark, closing the unbounded-scan trap that even the
+    F+STAR FM-mode gate cannot fully prevent. Original to VUURWERK;
+    egzumer's ENABLE_NO_CODE_SCAN_TIMEOUT flag is binary (16 seconds
+    or infinite), and no other UV-K5 fork ships a soft watchdog with
+    operator cue.
+
+  - Audio Palette VOX-Hop Cues: Two-tone audible feedback in
+    audio_palette.c for the VOX-hop spectrum mode. A short ascending
+    800/1200 Hz chord plays when the voice-hop search lands on a bin
+    with voiceProb >= 50; a soft 500 Hz double-beep plays when the
+    sweep completes without finding voice. Two-tone confirmation
+    chords are a standard audio-UX idiom; the original VUURWERK
+    contribution is the sound design and the integration of audio
+    feedback gated on VUURWERK-original voice scoring (Intelligence-
+    Based Squelch, LICENSE entry #4). No other UV-K5 fork has voice-
+    probability-gated audio cues because no other UV-K5 fork has
+    voice probability scoring.
+
+  - Boot-Time Hardware Health Probe: Two-part self-test in
+    boot_health.c that runs once after BK4819_Init and before the
+    welcome screen renders. The first pass reads BK4819 register
+    0x00 and latches a fault bit if the value reads 0xFFFF, the
+    signature of a wedged SPI bus. The second pass reads the
+    factory-programmed battery-calibration page at EEPROM address
+    0x1F40 and latches a separate fault bit if the entire 8-byte
+    block is 0xFF, the signature of a blanked or unreachable
+    calibration page. ui/welcome.c discriminates the cause and
+    renders either "BK4819 FAULT / RX/TX disabled" or "EEPROM FAULT /
+    calib lost" instead of the normal welcome banner. Genuinely
+    novel for the UV-K5 platform; no upstream fork (DualTachyon,
+    egzumer, kamilsss655, fagci) ships any boot-time hardware
+    diagnostic, and the silent-failure modes this probe surfaces
+    are otherwise indistinguishable from a working radio with
+    mis-rendered S-meter and battery icon.
+
+  - Live Battery Voltage During TX: 500ms tick in battery_tx_monitor.c
+    that advances the existing gBatteryVoltages[] rolling ring via
+    BOARD_ADC_GetBatteryInfo and calls BATTERY_GetReadings(true) so
+    the on-screen battery icon and voltage/percent text update in
+    real time while transmitting. Closes the TX-time battery
+    staleness gap inherited from DualTachyon and present in every
+    UV-K5 fork (egzumer, kamilsss655, fagci) under the same
+    gCurrentFunction != FUNCTION_TRANSMIT guard. Original to
+    VUURWERK.
+
+  - Backlight Fade-Out Tail and TX/RX Activity Refresh: Two
+    companion behaviours in backlight_fade.c. The fade-out tail
+    ramps the existing PWM brightness API down over 2 seconds at
+    the end of the idle window instead of cutting to black. The
+    TX/RX activity refresh re-arms the backlight countdown every
+    500ms during FUNCTION_TRANSMIT / FUNCTION_RECEIVE /
+    FUNCTION_INCOMING / FUNCTION_MONITOR when the operator's
+    per-mode bit is set, so the screen never goes dark mid-
+    conversation. Both behaviours implement standard backlight UX
+    patterns; the original VUURWERK contribution is the integration
+    via a dedicated companion module (backlight_fade.c) that leaves
+    the stock driver/backlight.c unmodified, and the per-radio-mode
+    arm-and-hold semantics (TX/RX/INCOMING/MONITOR refresh the
+    timer) that no other UV-K5 fork ships.
+
+  - TX Battery Sag Delta Tracker: Edge-detected per-transmission
+    voltage tracking in battery_sag.c. At PTT press the pre-TX
+    voltage is captured; during TX the running minimum is tracked;
+    at PTT release the sag delta is latched in 10mV units and
+    rendered as "TX sag NNNNmV" on the About screen. Depends on
+    Live Battery Voltage During TX (Feature #36) to update
+    gBatteryVoltageAverage during transmit; without that companion,
+    min == pre always and the tracker would always report zero.
+    Per-TX battery accounting is original to VUURWERK; no other
+    UV-K5 fork (DualTachyon, egzumer, kamilsss655, fagci) tracks
+    per-PTT battery health.
+
+  - CSS Scan Status-Bar Glyph and FOUND Beep: Two related CSS-scan
+    UX additions. A "Cs" glyph in ui/status.c distinguishes a CSS
+    scan from a channel scan and from SCANWATCH in the status bar.
+    A single 1 kHz beep emitted on the FOUND-edge of the CSS
+    scanner (after SCANNER_TimeSlice10ms) confirms when the
+    scanner has locked onto a tone, symmetric with the failure cue
+    from the soft-timeout watchdog above. A one-byte BSS latch
+    prevents repeated beeping while the FOUND state persists and
+    re-arms automatically on scanner exit. Both originals to
+    VUURWERK; no upstream fork distinguishes CSS scans visually
+    or emits a FOUND cue.
+
+  - Quiet Backlight PWM: Single VUURWERK marker block in main.c
+    that reprograms PWM_PLUS0_CLKSRC after BOARD_Init from
+    prescaler 46 (~1 kHz, stock egzumer / DualTachyon default) to
+    prescaler 7 (~6.7 kHz) so the backlight PWM carrier sits above
+    the 3 kHz audio passband. Eliminates the 1 kHz whine that bleeds
+    into outbound TX audio whenever the operator's screen is dimmed
+    during transmit. The technique was bench-validated and ported
+    by kamilsss655 (NUNU) in 2024 via stock-driver source
+    modification; VUURWERK's original contribution is the LAW-1-safe
+    main.c hook implementation, which keeps driver/backlight.c and
+    bsp/dp32g030/pwmplus.h byte-identical with the egzumer parent.
+    Acknowledged as a port of an existing technique with original
+    LAW-1-safe integration.
+
 ===========================================================================
 Dual-Licensing Notice
 ===========================================================================
 
-The VUURWERK-original source files listed above are dual-licensed:
+The VUURWERK-original source files listed above are
+dual-licensed:
 
-  1. GNU General Public License v3. When distributed as part of the
-     complete VUURWERK firmware. Consistent with the upstream
-     Egzumer/DualTachyon GPL license chain. You may fork, modify, and
-     redistribute the complete VUURWERK firmware under GPL v3 terms.
+  1. GNU General Public License v3. When distributed as
+     part of the complete VUURWERK firmware. Consistent
+     with the upstream Egzumer / DualTachyon GPL license
+     chain. You may fork, modify, and redistribute the
+     complete VUURWERK firmware under GPL v3 terms,
+     provided the complete firmware package is preserved
+     and the GPL v3 obligations are met.
 
-  2. Commercial License. Available from James Honiball for use of
-     VUURWERK-original algorithms and modules outside the GPL context.
-     If you wish to extract, adapt, or incorporate any VUURWERK-original
-     code into a non-GPL project or commercial product, contact the
-     author for licensing terms.
+  2. Commercial License. Required for any use of
+     VUURWERK-original algorithms, modules, or source
+     files outside the complete VUURWERK firmware package.
+     This includes, but is not limited to:
+       - Extracting an individual VUURWERK-original source
+         file and incorporating it into a separate project
+         (GPL or otherwise).
+       - Porting a VUURWERK-original algorithm to another
+         platform, firmware, or radio.
+       - Repackaging VUURWERK-original modules under a
+         different license, name, or branding.
+       - Use of VUURWERK-original code in any commercial
+         product or for-profit distribution.
+     A commercial license must be obtained in writing from
+     James Honiball before any such use.
 
-This dual-licensing applies ONLY to files bearing the VUURWERK dual-license
-header. All upstream Egzumer, DualTachyon, OneOfEleven, and fagci code
-remains under its original license terms (GPL v3 or Apache 2.0 as marked
-in each file).
+This dual-licensing applies to every source file bearing
+the VUURWERK dual-license header AND to every
+VUURWERK-original contribution listed in this LICENSE
+document, including contributions implemented as
+marker-block sections inside otherwise-upstream files
+(app/app.c, app/main.c, app/spectrum.c, ui/main.c,
+ui/status.c, ui/welcome.c, main.c, misc.c). The
+marker-block convention does not waive protection; the
+LICENSE contributions list above is the authoritative
+registry of VUURWERK-original work regardless of how it is
+integrated.
+
+All upstream Egzumer, DualTachyon, OneOfEleven, and fagci
+code remains under its original license terms (GPL v3 or
+Apache 2.0 as marked in each file).
 
 For commercial licensing inquiries: jhoniball4@gmail.com
 

@@ -1,13 +1,15 @@
 /* Copyright (c) 2026 James Honiball (KC3TFZ)
- * 
+ *
  * This file is part of VUURWERK and is dual-licensed:
  *   1. GPL v3 (when distributed as part of the VUURWERK firmware)
  *   2. Commercial license available from the author
- * 
- * You may not extract, repackage, or redistribute this file 
- * independently under any license other than GPL v3 as part 
+ *
+ * You may not extract, repackage, or redistribute this file
+ * independently under any license other than GPL v3 as part
  * of the complete VUURWERK firmware, without written permission
  * from the author.
+ *
+ * Commercial licensing inquiries: jhoniball4@gmail.com
  */
 
 #ifndef SIGNAL_QUALITY_H
@@ -33,11 +35,12 @@ typedef struct {
 
 extern RssiHistory_t gRssiHistory;
 
-// Initialize signal quality tracker
-void SIGNAL_QUALITY_Init(void);
-
-// Update with new RSSI reading
-void SIGNAL_QUALITY_Update(int16_t rssi_dBm);
+// Update with new RSSI reading. The frequency argument is the
+// current RX frequency in 10 Hz units (gEeprom.VfoInfo[vfo].pRX
+// ->Frequency); a change vs the last call resets the variance
+// ring buffer so dual-watch / cross-band flips do not produce
+// false-POOR Q:N readings on the status line.
+void SIGNAL_QUALITY_Update(int16_t rssi_dBm, uint32_t frequency);
 
 // Get current signal quality level
 // Returns: 0-3 (poor/fair/good/excellent)

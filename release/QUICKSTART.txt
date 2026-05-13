@@ -1,12 +1,12 @@
-VUURWERK v1.2.3 - Quick Start Guide
+VUURWERK v1.2.7 - Quick Start Guide
 
 FLASHING:
-1. Download vuurwerk-v1.2.3.packed.bin from the release/ folder
+1. Download vuurwerk-v1.2.7.packed.bin from the release/ folder
 2. Turn off your radio
 3. Hold PTT, turn on radio (flashlight LED = bootloader mode)
 4. Connect programming cable (Kenwood 2-pin) to radio and computer
 5. Open Chrome: https://egzumer.github.io/uvtools/
-6. Click "Select firmware file", choose vuurwerk-v1.2.3.packed.bin
+6. Click "Select firmware file", choose vuurwerk-v1.2.7.packed.bin
 7. Click "Flash firmware", wait ~10 seconds
 8. Disconnect cable, power cycle radio
 9. VUURWERK boot screen appears. Done.
@@ -37,7 +37,23 @@ TX Soft Start, CTCSS Lead-In, TX Compressor activate on every PTT
 FM Gain Staging, Adaptive Squelch, Signal Classifier run during RX
 Squelch Tail Elimination runs whenever CTCSS is set
 
+SPECTRUM VIEW SIDE-BUTTONS (v1.2.7 symmetric keymap):
+SIDE1 short / hold   Step frequency UP (auto-repeats while held)
+SIDE2 short / hold   Step frequency DOWN (auto-repeats while held)
+MENU short           Blacklist current peak bin
+
+ToggleBacklight is no longer reachable from spectrum view. To toggle
+the backlight while in spectrum, press EXIT, toggle from main screen,
+F+5 to re-enter.
+
+CSS SCANNER (v1.2.7 robustness):
+Park on a frequency with an active carrier first. The scanner's
+pre-flight RSSI gate aborts with NO SIGNAL toast on dead air.
+CTCSS lock now matches DCS speed (single confirmation, 120 ms dwell).
+Soft-timeout 30 seconds.
+
 See ACCESS_MAP.md for the complete feature access guide.
 See README.md for full documentation.
+See USER_MANUAL.md for button-by-button operator manual.
 
 73 de KC3TFZ

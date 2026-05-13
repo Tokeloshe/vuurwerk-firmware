@@ -1,27 +1,25 @@
 /* Copyright (c) 2026 James Honiball (KC3TFZ)
- * 
+ *
  * This file is part of VUURWERK and is dual-licensed:
  *   1. GPL v3 (when distributed as part of the VUURWERK firmware)
  *   2. Commercial license available from the author
- * 
- * You may not extract, repackage, or redistribute this file 
- * independently under any license other than GPL v3 as part 
+ *
+ * You may not extract, repackage, or redistribute this file
+ * independently under any license other than GPL v3 as part
  * of the complete VUURWERK firmware, without written permission
  * from the author.
+ *
+ * Commercial licensing inquiries: jhoniball4@gmail.com
  */
 
 #include "signal_classifier.h"
 
 SignalClassifier_t gSignalClassifier[2];
 
-void SIGNAL_CLASSIFIER_Init(void) {
-    for (uint8_t i = 0; i < 2; i++) {
-        gSignalClassifier[i].prev_rssi = -127;
-        gSignalClassifier[i].rise_time_ms = 0;
-        gSignalClassifier[i].stable_count = 0;
-        gSignalClassifier[i].classification = SIGNAL_CLASS_NOISE;
-    }
-}
+// v1.2.7: Init removed. BSS zero-init gives prev_rssi=0,
+// rise_time_ms=0, stable_count=0, classification=SIGNAL_CLASS_NOISE (=0).
+// Worst case is one extra NOISE classification on the first signal
+// post-boot before the algorithm self-corrects to FAST / NORMAL / SLOW.
 
 void SIGNAL_CLASSIFIER_Update(uint8_t vfo, int16_t rssi_dbm) {
     if (vfo > 1) return;

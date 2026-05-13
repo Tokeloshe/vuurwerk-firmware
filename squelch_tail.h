@@ -1,13 +1,15 @@
 /* Copyright (c) 2026 James Honiball (KC3TFZ)
- * 
+ *
  * This file is part of VUURWERK and is dual-licensed:
  *   1. GPL v3 (when distributed as part of the VUURWERK firmware)
  *   2. Commercial license available from the author
- * 
- * You may not extract, repackage, or redistribute this file 
- * independently under any license other than GPL v3 as part 
+ *
+ * You may not extract, repackage, or redistribute this file
+ * independently under any license other than GPL v3 as part
  * of the complete VUURWERK firmware, without written permission
  * from the author.
+ *
+ * Commercial licensing inquiries: jhoniball4@gmail.com
  */
 
 #ifndef SQUELCH_TAIL_H
@@ -25,13 +27,15 @@ typedef enum {
 
 typedef struct {
 	STE_State_t state;
-	uint8_t     lost_count;   // Ticks since tone lost (10ms each)
-	uint8_t     mute_count;   // Ticks since audio muted
+	uint8_t     lost_count;       // Ticks since tone lost (10ms each)
+	uint8_t     mute_count;       // Ticks since audio muted
+	uint8_t     monitor_streak;   // Saturating consecutive-present count
+	                              // in MONITORING (caps 8); low values
+	                              // demand longer loss confirmation
 } SquelchTail_t;
 
 extern SquelchTail_t gSquelchTail;
 
-void SQUELCH_TAIL_Init(void);
 void SQUELCH_TAIL_Process(void);   // Called every 10ms, self-activates on RX with CTCSS
 
 #endif

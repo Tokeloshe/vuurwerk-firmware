@@ -36,7 +36,7 @@
 #include "ui/inputbox.h"
 #include "ui/main.h"
 #include "ui/ui.h"
-#include "app/app.h"
+#include "toast.h"
 #include "signal_quality.h"
 #include "signal_classifier.h"
 #include "bandscope.h"
@@ -44,6 +44,7 @@
 #include "app/scanner.h"
 #include "frequencies.h"
 #include "driver/uart.h"
+#include "scan_rate.h"
 
 center_line_t center_line = CENTER_LINE_NONE;
 
@@ -852,7 +853,13 @@ void UI_DisplayMain(void)
 			char sc = SIGNAL_CLASSIFIER_GetSymbol(gEeprom.RX_VFO);
 			sprintf(ctx, "RX S%d %ddBm Q:%d %c", s_level, rssi_dbm, q, sc);
 		} else if (gScanStateDir != SCAN_OFF || SCANNER_IsScanning()) {
-			sprintf(ctx, "SCANNING");
+			// === VUURWERK v1.2.5 Scan rate telemetry ===
+			uint8_t cps = SCAN_RATE_ChannelsPerSec();
+			if (cps > 0)
+				sprintf(ctx, "SCANNING %uc/s", cps);
+			else
+				sprintf(ctx, "SCANNING");
+			// === END VUURWERK ===
 		} else {
 			const char *bw = gRxVfo->CHANNEL_BANDWIDTH ? "N" : "W";
 			const char *mod = gModulationStr[gRxVfo->Modulation];
@@ -869,10 +876,7 @@ void UI_DisplayMain(void)
 
 	// Toast notification overlay
 	if (toast_timer > 0) {
-		memset(gFrameBuffer[3] + 20, 0x00, 88);
-		for (uint8_t x = 20; x < 108; x++) {
-			gFrameBuffer[3][x] = 0xFF;
-		}
+		memset(gFrameBuffer[3] + 20, 0xFF, 88);
 		memset(gFrameBuffer[3] + 22, 0x00, 84);
 		UI_PrintStringSmallNormal(toast_msg, 24, 104, 3);
 	}

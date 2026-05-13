@@ -1,20 +1,22 @@
 /* Copyright (c) 2026 James Honiball (KC3TFZ)
- * 
+ *
  * This file is part of VUURWERK and is dual-licensed:
  *   1. GPL v3 (when distributed as part of the VUURWERK firmware)
  *   2. Commercial license available from the author
- * 
- * You may not extract, repackage, or redistribute this file 
- * independently under any license other than GPL v3 as part 
+ *
+ * You may not extract, repackage, or redistribute this file
+ * independently under any license other than GPL v3 as part
  * of the complete VUURWERK firmware, without written permission
  * from the author.
+ *
+ * Commercial licensing inquiries: jhoniball4@gmail.com
  */
 
 #include "tx_compressor.h"
 #include "driver/bk4819.h"
 #include "radio.h"
 
-// Configuration (user-adjustable via menu in future)
+// Configuration
 CompressorConfig_t gCompressorConfig = {
 	.enabled     = true,
 	.threshold   = 18,    // 0-31 mic level where compression starts
@@ -26,6 +28,7 @@ CompressorConfig_t gCompressorConfig = {
 
 static uint16_t original_reg_7d;
 static uint8_t  base_gain;
+static uint8_t  last_gain;
 static bool     compressor_active = false;
 
 // Envelope follower state
@@ -50,15 +53,12 @@ static uint16_t isqrt32(uint32_t n) {
 	return (uint16_t)(x > 0xFFFF ? 0xFFFF : x);
 }
 
-void TX_COMPRESSOR_Init(void) {
-	compressor_active = false;
-}
-
 void TX_COMPRESSOR_Start(void) {
 	if (!gCompressorConfig.enabled) return;
 
 	original_reg_7d = BK4819_ReadRegister(BK4819_REG_7D);
 	base_gain = original_reg_7d & MIC_GAIN_MASK;
+	last_gain = base_gain;
 
 	rms_accumulator = 0;
 	rms_count = 0;
@@ -118,23 +118,15 @@ void TX_COMPRESSOR_Process(void) {
 	if (final_gain < MIC_GAIN_MIN) final_gain = MIC_GAIN_MIN;
 	if (final_gain > MIC_GAIN_MAX) final_gain = MIC_GAIN_MAX;
 
-	uint16_t new_7d = (original_reg_7d & 0xFFE0) | ((uint16_t)final_gain & MIC_GAIN_MASK);
-	BK4819_WriteRegister(BK4819_REG_7D, new_7d);
+	if ((uint8_t)final_gain != last_gain) {
+		uint16_t new_7d = (original_reg_7d & 0xFFE0) | ((uint16_t)final_gain & MIC_GAIN_MASK);
+		BK4819_WriteRegister(BK4819_REG_7D, new_7d);
+		last_gain = (uint8_t)final_gain;
+	}
 }
 
 void TX_COMPRESSOR_Stop(void) {
 	if (!compressor_active) return;
 	BK4819_WriteRegister(BK4819_REG_7D, original_reg_7d);
 	compressor_active = false;
-}
-
-uint8_t TX_COMPRESSOR_GetGainReduction(void) {
-	// For UI display: current gain reduction in steps
-	if (!compressor_active) return 0;
-	uint16_t env_actual = (uint16_t)(envelope >> ENVELOPE_SHIFT);
-	if (env_actual <= gCompressorConfig.threshold) return 0;
-	uint16_t excess = env_actual - gCompressorConfig.threshold;
-	uint16_t red = (excess * (gCompressorConfig.ratio_x10 - 10)) / gCompressorConfig.ratio_x10;
-	uint8_t gr = (uint8_t)(red >> 1);
-	return (gr > 15) ? 15 : gr;
 }

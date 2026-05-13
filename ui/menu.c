@@ -18,6 +18,7 @@
 #include <stdlib.h>
 
 #include "../app/menu.h"
+#include "../app/scanner.h"
 #include "dtmf.h"
 #include "../bitmaps.h"
 #include "../board.h"
@@ -949,8 +950,18 @@ void UI_DisplayMenu(void)
 		}
 	}
 
-	if ((UI_MENU_GetCurrentMenuId() == MENU_R_CTCS || UI_MENU_GetCurrentMenuId() == MENU_R_DCS) && gCssBackgroundScan)
-		UI_PrintString("SCAN", menu_item_x1, menu_item_x2, 4, 8);
+	if ((UI_MENU_GetCurrentMenuId() == MENU_R_CTCS || UI_MENU_GetCurrentMenuId() == MENU_R_DCS) && gCssBackgroundScan) {
+		// === VUURWERK v1.2.5 background CSS scan dot animation ===
+		// Mirrors ui/scanner.c:69-72 idiom; gScanProgressIndicator is
+		// ticked every 500 ms by SCANNER_TimeSlice500ms whether or not
+		// ENABLE_NO_CODE_SCAN_TIMEOUT is set, so the cadence is free.
+		const uint8_t n = (gScanProgressIndicator & 7) + 1;
+		strcpy(String, "SCAN");
+		memset(String + 4, '.', n);
+		String[4 + n] = '\0';
+		UI_PrintString(String, menu_item_x1, menu_item_x2, 4, 8);
+		// === END VUURWERK ===
+	}
 
 #ifdef ENABLE_DTMF_CALLING
 	if (UI_MENU_GetCurrentMenuId() == MENU_D_LIST && gIsDtmfContactValid) {

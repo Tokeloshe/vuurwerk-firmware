@@ -1,6 +1,8 @@
-# VUURWERK v1.2.3 Feature Access Map
+# VUURWERK v1.2.7 Feature Access Map
 
 Complete guide to accessing every feature. Every mapping verified from source code.
+
+FEATURES.md is the canonical source of truth for the active feature inventory and the BK4819 register ownership table. If this document and FEATURES.md disagree, FEATURES.md wins.
 
 ---
 
@@ -253,8 +255,6 @@ Guard condition: `gCurrentFunction == FUNCTION_TRANSMIT`
 | **RSSI Histogram Update** | app.c:1326 | Bins RSSI readings, finds noise floor every 256 samples |
 | **Signal Classifier Update** | app.c:1327 | Measures signal rise time, classifies as F/N/S/~ |
 | **Dual-Watch Mgmt Update** | app.c:1328 | Updates per-VFO RSSI averaging for dwell time calculation |
-| **Activity Log** | app.c:1335 | Records freq, RSSI, CTCSS, quality on squelch open |
-| **Activity Log Uptime** | app.c:1342 | Increments uptime counter every 1 second during RX |
 
 Guard condition: `gCurrentFunction == FUNCTION_RECEIVE || FUNCTION_MONITOR`
 
@@ -267,6 +267,18 @@ Guard condition: `gCurrentFunction == FUNCTION_RECEIVE || FUNCTION_MONITOR`
 | **VFO Split Process** | app.c:1183 | 5-state hop machine checking VFO B (when enabled) |
 | **Squelch Tail Process** | app.c:1309 | Monitors CTCSS tone loss via REG_0C (when STE enabled) |
 | **Smart Squelch Update** | app.c:1312 | 3-register voice probability scoring, adjusts REG_78 |
+| **Toast Tick** | app.c:1135 | Decrements toast countdown every 10ms; renders via ui/main.c |
+| **Flashlight Watchdog** | APP_TimeSlice10ms (after FlashlightTimeSlice) | Auto-extinguishes flashlight ON/BLINK after 30 min (10 min on low-battery pack); SOS preserved |
+| **Scan Rate Tick** | APP_TimeSlice10ms | Maintains rolling 100-tick channels-per-second counter for status-line display during scan |
+| **CSS Scan Soft-Timeout** | APP_TimeSlice500ms (after SCANNER_TimeSlice500ms) | 60-second wall-clock cap on CSS scan; flips to FAILED state and queues audible cue |
+| **CSS Scan FOUND Beep** | APP_TimeSlice10ms (after SCANNER_TimeSlice10ms) | Edge-triggered 1 kHz beep when scanner reaches FOUND state; one-byte BSS latch re-arms on EXIT |
+| **Battery TX Monitor** | APP_TimeSlice500ms | Advances battery-voltage ring during TX so on-screen indicator updates live |
+| **Battery Sag** | APP_TimeSlice500ms (after Battery TX Monitor) | Edge-detects TX entry/exit; latches per-TX voltage sag delta for About-screen display |
+| **Backlight Fade Tick** | APP_TimeSlice500ms (after Battery TX Monitor) | 2-second taper to TurnOff at end of idle window |
+| **Backlight Activity Refresh** | APP_TimeSlice500ms (before stock decrement) | Re-arms backlight countdown during TRANSMIT/RECEIVE/INCOMING/MONITOR if per-mode bit is set |
+| **Side Toast Hook** | APP_TimeSlice10ms (after ACTION_Handle) | Emits 1-second toast for SIDE1, SIDE2, long-press MENU when their actions execute |
+| **Boot Health Probe** | main.c (one-shot, after BK4819_Init) | Reads REG_00 to detect wedged BK4819; reads EEPROM 0x1F40 page to detect blanked calibration; latches fault bits for welcome-screen banner |
+| **Audio Palette Cue** | app/spectrum.c VOX hop branch | Plays ascending two-tone chord on voice-found hop; soft double-beep on sweep-without-voice |
 
 ---
 
@@ -344,7 +356,7 @@ The **Signal Classifier Symbol** (F/N/S/~) appears at the end of the RX status l
 
 ## Spectrum Analyzer Modes
 
-Access: F+5 from main screen. Press Star key to cycle modes.
+Access: F+5 from main screen. Press Star key to cycle modes; a brief "MODE <name>" overlay confirms the change (v1.2.6).
 
 | Mode | Label | What It Shows |
 |------|-------|---------------|
@@ -354,16 +366,62 @@ Access: F+5 from main screen. Press Star key to cycle modes.
 | 3 | VOX | Voice probability per bin, voice-hop navigation (UP/DOWN) |
 
 In VOX mode:
-- Bars scaled by voice confidence (half-height < 75%, full-height >= 75%)
-- UP/DOWN keys hop to next frequency bin with voice probability >= 50
+- Bars draw on voice probability >= 50 (hop threshold); half-height for 50-74, full-height for >= 75; floor dot below 50 (v1.2.6 tier threshold raised from 35 to match the hop threshold)
+- 1-pixel marker tick at y=0 over every hop-eligible bin (v1.2.6)
+- UP/DOWN keys hop to next frequency bin with voice probability >= 50, skipping blacklisted bins (v1.2.6 blacklist check added)
 - Auto-listens and checks noise register for voice presence
+
+### Spectrum view side-button keymap (v1.2.7)
+
+| Gesture | Action | Implementation |
+|---|---|---|
+| SIDE1 short / hold | Frequency UP one step (auto-repeats while held) | app/spectrum.c OnKeyDown KEY_SIDE1 calls UpdateCurrentFreq(true) |
+| SIDE2 short / hold | Frequency DOWN one step (auto-repeats while held, symmetric with SIDE1) | app/spectrum.c OnKeyDown KEY_SIDE2 calls UpdateCurrentFreq(false) |
+| MENU short | Blacklist current peak bin | app/spectrum.c OnKeyDown KEY_MENU calls Blacklist() |
+
+ToggleBacklight is no longer accessible from spectrum view (v1.2.7 removed the v1.2.6 SIDE2 long-press binding). Operators wanting to toggle backlight while in spectrum: EXIT, toggle from main screen, F+5 to re-enter.
+
+UP / DOWN remain mode-aware: voice-hop in VOX, frequency step in NORM / PEAK / MTI (unchanged from v1.2.5).
+
+### CSS Scanner Robustness (v1.2.7)
+
+| Behaviour | Implementation |
+|---|---|
+| Pre-flight RSSI gate (NO SIGNAL toast + 500 Hz double-beep on dead air) | app/scanner.c SCANNER_Start singleFreq path reads BK4819_GetRSSI() after 50 ms AGC settle; aborts when RSSI < raw 100 (~-110 dBm) |
+| CTCSS lock on first confirmation (matches DCS behaviour) | app/scanner.c SCANNER_TimeSlice10ms merged CDCSS/CTCSS arms |
+| Dwell 120 ms (was 210 ms) | misc.c scan_delay_10ms = 12 |
+| Soft-timeout 30 s (was 60 s) | app/app.c CSS scan soft-timeout watchdog threshold reduced from 120 ticks to 60 ticks |
 
 ---
 
 ## Unreachable Features
 
-None. All 27 documented features have verified execution paths from `main()`. Every function listed as "active" in FEATURES.md has at least one reachable call site.
+None. All 41 documented features have verified execution paths from `main()`. Every function listed as "active" in FEATURES.md has at least one reachable call site. The #27 slot is intentionally empty (Activity Log retired in v1.2.5).
 
 ---
 
-*VUURWERK v1.2.3 -- All mappings verified from source code, 2026-02-21*
+## BK4819 Register Ownership
+
+Mirror of the canonical table in FEATURES.md "BK4819 Register Ownership". If this table drifts from FEATURES.md, FEATURES.md is authoritative.
+
+| Register | Owner Module | Direction | Purpose |
+|----------|-------------|-----------|---------|
+| REG_00 | boot_health.c | Read | One-shot post-init liveness probe (BK4819_Init writes for soft reset; boot_health reads once to detect 0xFFFF wedged-SPI signature) |
+| REG_0C | squelch_tail.c | Read | CTCSS found flag (bit 1) |
+| REG_13 | gain_staging.c, am_fix.c | Write | RX gain control (FM only, AM_fix owns in AM mode) |
+| REG_36 | tx_soft_start.c | Write (via API) | PA power level |
+| REG_47 | squelch_tail.c | Write (via API) | Audio path AF mute/unmute |
+| REG_48 | stock radio.c | Write | AF RX gain + DAC |
+| REG_50 | ctcss_lead.c | Write (via API) | TX mic mute |
+| REG_63 | smart_squelch.c | Read | Glitch indicator (transients) |
+| REG_64 | tx_compressor.c | Read | Mic level amplitude |
+| REG_65 | smart_squelch.c, app/spectrum.c VOX | Read | Noise indicator (voice predictor) |
+| REG_67 | gain_staging.c, smart_squelch.c, bandscope.c, vfo_split.c | Read | RSSI |
+| REG_78 | smart_squelch.c | Write | RSSI squelch open/close threshold |
+| REG_7D | tx_compressor.c | Write | Mic gain (bits 4:0) |
+
+Each module touches only its designated registers. No register conflicts exist between modules.
+
+---
+
+*VUURWERK v1.2.7 -- All mappings verified from source code, 2026-05-13*

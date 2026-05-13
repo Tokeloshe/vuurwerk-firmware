@@ -16,6 +16,7 @@
  */
 
 #ifndef AM_FIXH
+#define AM_FIXH
 
 #include <stdint.h>
 #include <stdbool.h>

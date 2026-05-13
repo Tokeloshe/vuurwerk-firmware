@@ -15,42 +15,27 @@
  */
 
 #include <string.h>
-#include "dtmf.h"
 
 #include "app/app.h"
-#include "dtmf.h"
 #include "app/chFrScanner.h"
-#include "dtmf.h"
 #include "app/common.h"
-#include "dtmf.h"
 
 #ifdef ENABLE_FMRADIO
 	#include "app/fm.h"
-#include "dtmf.h"
 #endif
 
 #include "app/generic.h"
-#include "dtmf.h"
 #include "app/menu.h"
-#include "dtmf.h"
 #include "app/scanner.h"
-#include "dtmf.h"
 #include "audio.h"
-#include "dtmf.h"
 #include "driver/keyboard.h"
 #include "dtmf.h"
 #include "external/printf/printf.h"
-#include "dtmf.h"
 #include "functions.h"
-#include "dtmf.h"
 #include "misc.h"
-#include "dtmf.h"
 #include "settings.h"
-#include "dtmf.h"
 #include "ui/inputbox.h"
-#include "dtmf.h"
 #include "ui/ui.h"
-#include "dtmf.h"
 
 void GENERIC_Key_F(bool bKeyPressed, bool bKeyHeld)
 {

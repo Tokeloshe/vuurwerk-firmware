@@ -16,6 +16,7 @@
 #include "app/spectrum.h"
 #include "am_fix.h"
 #include "audio.h"
+#include "audio_palette.h"
 #include "misc.h"
 
 #ifdef ENABLE_SCAN_RANGES
@@ -91,6 +92,10 @@ static uint8_t sweep_count = 0;
 // VOIC mode: noise capture and voice probability per bin
 static uint8_t noiseHistory[128];
 static uint8_t voiceProb[128];
+
+// v1.2.6 spectrum visual polish state (v1.2.7 dropped the SIDE2
+// release/long-press state machine; SIDE2 now mirrors SIDE1).
+static uint8_t s_mode_toast_renders = 0;
 
 int vfo;
 uint8_t freqInputIndex = 0;
@@ -757,12 +762,12 @@ static void DrawSpectrum() {
     }
     break;
 
-  case 3: // VOICE mode — show bars only where voice detected
+  case 3: // VOICE mode -- bars only on hop-eligible bins (vp >= 50)
     for (uint8_t x = 0; x < 128; ++x) {
       uint8_t bin = x >> settings.stepsCount;
       uint8_t vp = voiceProb[bin];
 
-      if (vp < 35) {
+      if (vp < 50) {
         PutPixel(x, DrawingEndY, true);
         continue;
       }
@@ -773,6 +778,7 @@ static void DrawSpectrum() {
       if (vp < 75) h >>= 1;
 
       DrawVLine(DrawingEndY - h, DrawingEndY, x, true);
+      PutPixel(x, 0, true);
     }
     break;
   }
@@ -919,20 +925,28 @@ static void OnKeyDown(uint8_t key) {
     if (spectrum_mode == 3) {
       // VOIC hop: search for next voice bin within actual step count
       uint8_t vi = peak.i;
+      bool hopped = false;
       uint16_t steps = GetStepsCount();
       if (steps > 128) steps = 128;
       for (uint8_t vj = 1; vj < steps; vj++) {
         if (key == KEY_UP) { vi = (vi + 1 < steps) ? vi + 1 : 0; }
         else               { vi = vi ? vi - 1 : steps - 1; }
-        if (voiceProb[vi] >= 50) {
+        if (voiceProb[vi] >= 50
+#ifdef ENABLE_SCAN_RANGES
+            && !IsBlacklisted(vi)
+#endif
+            ) {
           peak.i = vi; peak.t = 0;
           peak.f = scanFStart + (uint32_t)vi * scanInfo.scanStep;
           peak.rssi = rssiHistory[vi];
+          AUDIO_PALETTE_PlayFoundVoice();
           ToggleRX(true);
           TuneToPeak();
+          hopped = true;
           break;
         }
       }
+      if (!hopped) gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
       break;
     }
 #ifdef ENABLE_SCAN_RANGES
@@ -941,10 +955,18 @@ static void OnKeyDown(uint8_t key) {
       UpdateCurrentFreq(key == KEY_UP);
     break;
   case KEY_SIDE1:
-    Blacklist();
+#ifdef ENABLE_SCAN_RANGES
+    if (!gScanRangeStart)
+#endif
+      UpdateCurrentFreq(true);
     break;
   case KEY_STAR:
-    spectrum_mode = (spectrum_mode + 1) % 4;
+    spectrum_mode = (spectrum_mode + 1) & 3;
+    memset(peak_hold, 0, sizeof(peak_hold));
+    memset(prev_sweep, 0, sizeof(prev_sweep));
+    memset(noiseHistory, 0, sizeof(noiseHistory));
+    memset(voiceProb, 0, sizeof(voiceProb));
+    s_mode_toast_renders = 6;
     redrawScreen = true;
     break;
   case KEY_F:
@@ -969,13 +991,17 @@ static void OnKeyDown(uint8_t key) {
       ToggleStepsCount();
     break;
   case KEY_SIDE2:
-    ToggleBacklight();
+#ifdef ENABLE_SCAN_RANGES
+    if (!gScanRangeStart)
+#endif
+      UpdateCurrentFreq(false);
     break;
   case KEY_PTT:
     SetState(STILL);
     TuneToPeak();
     break;
   case KEY_MENU:
+    Blacklist();
     break;
   case KEY_EXIT:
     if (menuState) {
@@ -1119,6 +1145,14 @@ static void RenderSpectrum() {
   DrawNums();
   // Show current spectrum mode
   GUI_DisplaySmallest(specModeNames[spectrum_mode], 108, 1, false, true);
+  // v1.2.6: brief mode-change toast (~6 renders) on STAR press
+  if (s_mode_toast_renders) {
+    sprintf(String, "MODE %s", specModeNames[spectrum_mode]);
+    memset(&gFrameBuffer[2][20], 0, 88);
+    memset(&gFrameBuffer[3][20], 0, 88);
+    UI_PrintStringSmallNormal(String, 20, 107, 2);
+    s_mode_toast_renders--;
+  }
 }
 
 static void RenderStill() {

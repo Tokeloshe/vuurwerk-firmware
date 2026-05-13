@@ -1,4 +1,4 @@
-# VUURWERK v1.0.0 - Flashing Instructions
+# VUURWERK v1.2.7 - Flashing Instructions
 
 ## Requirements
 
@@ -26,12 +26,12 @@ Connect the USB programming cable to both radio and computer.
 
 **Using k5prog (Linux/Mac)**:
 ```bash
-k5prog -F -YYY -b vuurwerk-v1.0.0.bin
+k5prog -F -YYY -b vuurwerk-v1.2.7.bin
 ```
 
 **Using k5prog-win (Windows)**:
 1. Open k5prog-win GUI
-2. Select `vuurwerk-v1.0.0.bin`
+2. Select `vuurwerk-v1.2.7.bin`
 3. Click "Write to Radio"
 4. Wait for completion
 
@@ -44,7 +44,7 @@ Turn radio off, wait 5 seconds, turn on.
 
 ### 6. Verify
 
-You should see the VUURWERK boot screen with version v1.0.0.
+You should see the VUURWERK boot screen with version v1.2.7.
 
 ## Troubleshooting
 

@@ -31,6 +31,7 @@
 
 #include "app/app.h"
 #include "bsp/dp32g030/gpio.h"
+#include "bsp/dp32g030/pwmplus.h"
 #include "bsp/dp32g030/syscon.h"
 
 #include "driver/backlight.h"
@@ -62,13 +63,12 @@
 #include "tx_soft_start.h"
 #include "vfo_split.h"
 #include "bandscope.h"
-#include "activity_log.h"
 #include "rssi_filter.h"
 #include "rssi_histogram.h"
 #include "signal_classifier.h"
 #include "dual_watch_mgmt.h"
 #include "gain_staging.h"
-#include "status_line.h"
+#include "boot_health.h"
 
 void _putchar(__attribute__((unused)) char c)
 {
@@ -110,6 +110,7 @@ void Main(void)
 	gDTMF_String[sizeof(gDTMF_String) - 1] = 0;
 
 	BK4819_Init();
+	BOOT_HEALTH_Probe();
 
 	BOARD_ADC_GetBatteryInfo(&gBatteryCurrentVoltage, &gBatteryCurrent);
 
@@ -134,22 +135,21 @@ void Main(void)
 #endif
 
 	// VUURWERK v1.0.9 initialization
-	SCANWATCH_Init();
-	SQUELCH_Init();
-	SIGNAL_QUALITY_Init();
-	SQUELCH_TAIL_Init();
-	TX_COMPRESSOR_Init();
-	CTCSS_LEAD_Init();
-	TX_SOFT_START_Init();
-	VFO_SPLIT_Init();
-	BANDSCOPE_Init();
-	ACTIVITY_LOG_Init();
+	// (v1.2.7: RSSI_HISTOGRAM_Init + SIGNAL_CLASSIFIER_Init dropped --
+	// BSS zero-init covers both cases at boot.)
 	RSSI_FILTER_Init();
-	RSSI_HISTOGRAM_Init();
-	SIGNAL_CLASSIFIER_Init();
 	DUAL_WATCH_MGMT_Init();
-	GAIN_STAGING_Init();
-	STATUS_LINE_Init();
+
+	// === VUURWERK v1.2.7 Quiet backlight PWM (raise carrier above audio passband) ===
+	// Stock backlight.c sets PWM carrier to ~1kHz which couples into the
+	// outbound mic preamp / PA supply rail and emits an audible whine to
+	// receiving stations whenever the operator's screen is dimmed during TX.
+	// Re-program the PWM_PLUS0 prescaler to ~6.7kHz (above the 3kHz audio
+	// passband). Mask preserves the lower 16-bit clock-source-select field
+	// that BACKLIGHT_InitHardware ORed in. NUNU bench-validated the same
+	// fix at the source-line level; LAW 1 keeps driver/backlight.c untouched.
+	PWM_PLUS0_CLKSRC = (PWM_PLUS0_CLKSRC & 0x0000FFFFu) | (7u << 16);
+	// === end VUURWERK v1.2.7 ===
 
 	const BOOT_Mode_t  BootMode = BOOT_GetMode();
 

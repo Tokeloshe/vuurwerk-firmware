@@ -23,10 +23,6 @@
 #include "frequencies.h"
 #include "radio.h"
 
-extern char     toast_msg[16];
-extern uint8_t  toast_timer;
-void     TOAST_Show(const char *msg);
-
 void     APP_EndTransmission(void);
 void     APP_StartListening(FUNCTION_Type_t function);
 uint32_t APP_SetFreqByStepAndLimits(VFO_Info_t *pInfo, int8_t direction, uint32_t lower, uint32_t upper);

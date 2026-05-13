@@ -30,6 +30,7 @@
 #include "functions.h"
 #include "misc.h"
 #include "settings.h"
+#include "signal_classifier.h"
 #ifdef ENABLE_AGC_SHOW_DATA
 #include "ui/main.h"
 #endif
@@ -208,13 +209,16 @@ typedef union  {
 	unsigned int counter = 0;
 #endif
 
-unsigned int gain_table_index[2] = {0, 0};
+uint8_t gain_table_index[2] = {0, 0};
 // used simply to detect a changed gain setting
-unsigned int gain_table_index_prev[2] = {0, 0};
+uint8_t gain_table_index_prev[2] = {0, 0};
 // holds the previous RSSI level .. we do an average of old + new RSSI reading
 int16_t prev_rssi[2] = {0, 0};
 // to help reduce gain hunting, peak hold count down tick
-unsigned int hold_counter[2] = {0, 0};
+uint8_t hold_counter[2] = {0, 0};
+
+// Adaptive hold: NOISE=30, FAST=15, NORMAL=30, SLOW=50 ticks (x10ms)
+static const uint8_t kAmHoldTicks[] = {30, 15, 30, 50};
 // -89dBm, any higher and the AM demodulator starts to saturate/clip/distort
 const int16_t desired_rssi = (-89 + 160) * 2;
 
@@ -335,12 +339,12 @@ void AM_fix_10ms(const unsigned vfo)
 		if (gain_table_index[vfo] != index)
 		{
 			gain_table_index[vfo] = index;
-			hold_counter[vfo] = 30;       // 300ms hold
+			hold_counter[vfo] = kAmHoldTicks[SIGNAL_CLASSIFIER_GetClass(vfo)];
 		}
 	}
 
 	if (diff_dB >= -6)                    // 6dB hysterisis (help reduce gain hunting)
-		hold_counter[vfo] = 30;           // 300ms hold
+		hold_counter[vfo] = kAmHoldTicks[SIGNAL_CLASSIFIER_GetClass(vfo)];
 
 	if (hold_counter[vfo] == 0)
 	{	// hold has been released, we're free to increase gain

@@ -1,13 +1,15 @@
 /* Copyright (c) 2026 James Honiball (KC3TFZ)
- * 
+ *
  * This file is part of VUURWERK and is dual-licensed:
  *   1. GPL v3 (when distributed as part of the VUURWERK firmware)
  *   2. Commercial license available from the author
- * 
- * You may not extract, repackage, or redistribute this file 
- * independently under any license other than GPL v3 as part 
+ *
+ * You may not extract, repackage, or redistribute this file
+ * independently under any license other than GPL v3 as part
  * of the complete VUURWERK firmware, without written permission
  * from the author.
+ *
+ * Commercial licensing inquiries: jhoniball4@gmail.com
  */
 
 #include "gain_staging.h"
@@ -28,19 +30,8 @@ static uint32_t last_frequency[2] = {0, 0};
 // FM: -75 dBm target (FM limiter has headroom, run higher gain)
 #define FM_TARGET_RSSI  ((int16_t)((-75 + 160) * 2))
 
-void GAIN_STAGING_Init(void)
-{
-    for (uint8_t i = 0; i < 2; i++) {
-        gGainStaging[i].table_index      = 0;  // Index 0 = stock gain (-7dB)
-        gGainStaging[i].table_index_prev = 0;
-        gGainStaging[i].prev_rssi        = 0;
-        gGainStaging[i].hold_counter     = 0;
-        gGainStaging[i].target_rssi_dBm  = -75;
-        last_frequency[i] = 0;
-    }
-}
-
-void GAIN_STAGING_Reset(uint8_t vfo)
+// v1.2.7: statified (zero external callers).
+static void GAIN_STAGING_Reset(uint8_t vfo)
 {
     if (vfo > 1) return;
     gGainStaging[vfo].table_index      = 0;  // Back to stock gain
@@ -53,11 +44,11 @@ void GAIN_STAGING_10ms(uint8_t vfo)
 {
     if (vfo > 1) return;
 
-    // === GUARD: FM mode only — AM_fix owns REG_13 in AM/USB ===
+    // === GUARD: FM mode only -- AM_fix owns REG_13 in AM/USB ===
     if (gRxVfo->Modulation != MODULATION_FM)
         return;
 
-    // === GUARD: Only during FOREGROUND (idle) and RX — skip TX and power save ===
+    // === GUARD: Only during FOREGROUND (idle) and RX -- skip TX and power save ===
     if (gCurrentFunction != FUNCTION_FOREGROUND && !FUNCTION_IsRx())
         return;
 
@@ -88,7 +79,7 @@ void GAIN_STAGING_10ms(uint8_t vfo)
     int16_t diff_dB = (rssi - FM_TARGET_RSSI) / 2;
 
     if (diff_dB > 0) {
-        // Signal too strong — DECREASE gain (fast attack)
+        // Signal too strong -- DECREASE gain (fast attack)
         unsigned int index = gs->table_index;
 
         if (diff_dB >= 10) {
@@ -123,7 +114,7 @@ void GAIN_STAGING_10ms(uint8_t vfo)
         gs->hold_counter = 30;
 
     if (gs->hold_counter == 0) {
-        // Hold expired — free to INCREASE gain (slow release)
+        // Hold expired -- free to INCREASE gain (slow release)
         // This is the critical path: when squelch is closed and no signal,
         // gain ramps UP one step at a time until either:
         //   (a) a signal is found (squelch opens, then we pull down if needed)

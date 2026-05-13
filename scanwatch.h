@@ -1,13 +1,15 @@
 /* Copyright (c) 2026 James Honiball (KC3TFZ)
- * 
+ *
  * This file is part of VUURWERK and is dual-licensed:
  *   1. GPL v3 (when distributed as part of the VUURWERK firmware)
  *   2. Commercial license available from the author
- * 
- * You may not extract, repackage, or redistribute this file 
- * independently under any license other than GPL v3 as part 
+ *
+ * You may not extract, repackage, or redistribute this file
+ * independently under any license other than GPL v3 as part
  * of the complete VUURWERK firmware, without written permission
  * from the author.
+ *
+ * Commercial licensing inquiries: jhoniball4@gmail.com
  */
 
 #ifndef SCANWATCH_H
@@ -30,16 +32,12 @@ typedef enum {
 
 typedef struct {
     ScanWatch_State_t state;
-    uint8_t  scan_vfo;          // 0=A or 1=B — which VFO is scanning
-    uint8_t  watch_vfo;         // the other VFO (always !scan_vfo)
+    uint8_t  scan_vfo;          // 0=A or 1=B -- which VFO is scanning. watch VFO is (scan_vfo ^ 1).
     uint8_t  step_counter;      // counts scan steps until next watch check
     uint16_t dwell_timer_10ms;  // countdown timer for dwell/hold (in 10ms ticks)
 } ScanWatch_t;
 
 extern ScanWatch_t gScanWatch;
-
-// Initialize all state to zero
-void SCANWATCH_Init(void);
 
 // Enable scan+watch. scan_vfo: 0=scan A watch B, 1=scan B watch A
 void SCANWATCH_Enable(uint8_t scan_vfo);
@@ -61,7 +59,7 @@ static inline bool SCANWATCH_IsActive(void) {
     return gScanWatch.state != SCANWATCH_OFF;
 }
 
-// Convenience check — are we currently on the watch VFO?
+// Convenience check -- are we currently on the watch VFO?
 static inline bool SCANWATCH_IsOnWatchVFO(void) {
     return gScanWatch.state == SCANWATCH_CHECKING || gScanWatch.state == SCANWATCH_LISTENING;
 }

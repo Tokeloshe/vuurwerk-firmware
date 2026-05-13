@@ -82,27 +82,22 @@
 #include "bandscope.h"
 #include "gain_staging.h"
 #include "vfo_split.h"
-#include "activity_log.h"
 #include "rssi_filter.h"
 #include "rssi_histogram.h"
 #include "signal_classifier.h"
 #include "dual_watch_mgmt.h"
 #include "scanwatch.h"
-#include "status_line.h"
+#include "side_toast.h"
+#include "toast.h"
+#include "scan_rate.h"
+#include "flashlight_watchdog.h"
+#include "battery_tx_monitor.h"
+#include "backlight_fade.h"
+#include "battery_sag.h"
 
 static bool flagSaveVfo;
 static bool flagSaveSettings;
 static bool flagSaveChannel;
-
-// Toast notification system
-char     toast_msg[16] = "";
-uint8_t  toast_timer = 0;
-
-void TOAST_Show(const char *msg) {
-	strncpy(toast_msg, msg, 15);
-	toast_msg[15] = 0;
-	toast_timer = 100;  // ~1 second at 10ms ticks
-}
 
 static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld);
 
@@ -465,8 +460,14 @@ void APP_StartListening(FUNCTION_Type_t function)
 		BACKLIGHT_TurnOn();
 	}
 
-	if (gScanStateDir != SCAN_OFF)
+	// === VUURWERK v1.2.5 Scan+Watch find isolation ===
+	// Don't record watch-VFO finds as scan results: the scan loop owns
+	// gNextMrChannel / lastFoundFrqOrChan, and a watch-VFO find would
+	// commit VFO B's channel index into VFO A's MR slot when STOP fires.
+	// Mirrors the existing scan-continue gate in HandleAction() above.
+	if (gScanStateDir != SCAN_OFF && !SCANWATCH_IsOnWatchVFO())
 		CHFRSCANNER_Found();
+	// === end VUURWERK v1.2.5 ===
 
 #ifdef ENABLE_NOAA
 	if (IS_NOAA_CHANNEL(gRxVfo->CHANNEL_SAVE) && gIsNoaaMode) {
@@ -866,13 +867,17 @@ void APP_Update(void)
 	if (!SCANNER_IsScanning() && gScanStateDir != SCAN_OFF && gScheduleScanListen && !gPttIsPressed
 		&& !SCANWATCH_IsOnWatchVFO())
 #endif
-	{	// scanning — blocked when Scan+Watch is dwelling on watch VFO
+	{	// scanning -- blocked when Scan+Watch is dwelling on watch VFO
 		CHFRSCANNER_ContinueScanning();
+
+		// === VUURWERK v1.2.5 Scan rate telemetry ===
+		SCAN_RATE_NoteStep();
+		// === END VUURWERK ===
 
 		// Scan+Watch: count this REAL scan step, maybe switch to watch VFO
 		if (SCANWATCH_IsActive() && SCANWATCH_OnScanStep())
 		{
-			gEeprom.RX_VFO = gScanWatch.watch_vfo;
+			gEeprom.RX_VFO = gScanWatch.scan_vfo ^ 1;
 			gRxVfo         = &gEeprom.VfoInfo[gEeprom.RX_VFO];
 			RADIO_SetupRegisters(false);
 		}
@@ -1132,7 +1137,13 @@ void APP_TimeSlice10ms(void)
 	gNextTimeslice = false;
 	gFlashLightBlinkCounter++;
 
-	if (toast_timer > 0) toast_timer--;
+	// === VUURWERK v1.2.5 Toast subsystem tick ===
+	TOAST_Tick();
+	// === END VUURWERK ===
+
+	// === VUURWERK v1.2.5 Scan rate telemetry tick ===
+	SCAN_RATE_Tick10ms();
+	// === END VUURWERK ===
 
 #ifdef ENABLE_BOOT_BEEPS
 	if (boot_counter_10ms > 0 && (boot_counter_10ms % 25) == 0) {
@@ -1215,6 +1226,9 @@ void APP_TimeSlice10ms(void)
 
 #ifdef ENABLE_FLASHLIGHT
 	FlashlightTimeSlice();
+	// === VUURWERK v1.2.5 Flashlight watchdog (auto-off ON/BLINK after 30 min, SOS preserved) ===
+	FLASHLIGHT_WATCHDOG_Tick();
+	// === END VUURWERK ===
 #endif
 
 #ifdef ENABLE_VOX
@@ -1297,6 +1311,28 @@ void APP_TimeSlice10ms(void)
 
 	SCANNER_TimeSlice10ms();
 
+	// === VUURWERK v1.2.7 CSS scan FOUND beep ===
+	// Symmetric counterpart to the v1.2.5 CSS scan soft-timeout
+	// watchdog FAILED beep (500HZ double-beep at line 1597). On the
+	// SCAN_CSS_STATE_SCANNING -> SCAN_CSS_STATE_FOUND transition emit
+	// a single 1 kHz 60 ms OPTIONAL beep so the operator gets audible
+	// confirmation of a successful tone find without staring at the
+	// SCANNER or MENU display. Latch resets the moment the scan
+	// session ends (SCANNER_IsScanning() goes false on EXIT) so the
+	// next scan launch gets its own cue.
+	{
+		static uint8_t s_beeped;
+		if (SCANNER_IsScanning() && gScanCssState == SCAN_CSS_STATE_FOUND && gScanUseCssResult) {
+			if (!s_beeped) {
+				gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
+				s_beeped    = 1;
+			}
+		} else {
+			s_beeped = 0;
+		}
+	}
+	// === end VUURWERK ===
+
 #ifdef ENABLE_AIRCOPY
 	if (gScreenToDisplay == DISPLAY_AIRCOPY && gAircopyState == AIRCOPY_TRANSFER && gAirCopyIsSendMode == 1) {
 		if (!AIRCOPY_SendMessage()) {
@@ -1314,6 +1350,8 @@ void APP_TimeSlice10ms(void)
 	// === VUURWERK v1.1.0 RX PROCESSING (software-only, no BK4819 register writes) ===
 	{
 		static bool was_receiving = false;
+		static uint8_t s_rx_vfo = 0;
+		static uint16_t s_rx_duration_10ms = 0;
 		bool is_receiving = (gCurrentFunction == FUNCTION_RECEIVE || gCurrentFunction == FUNCTION_MONITOR);
 
 		if (is_receiving) {
@@ -1322,40 +1360,22 @@ void APP_TimeSlice10ms(void)
 			int16_t rssi_dbm = (rssi_raw / 2) - 160;  // Convert to dBm ONCE
 
 			gVFO_RSSI[vfo] = RSSI_FILTER_Update(vfo, rssi_dbm);    // Now in dBm
-			SIGNAL_QUALITY_Update(gVFO_RSSI[vfo]);                  // dBm: thresholds now correct
+			SIGNAL_QUALITY_Update(gVFO_RSSI[vfo], gEeprom.VfoInfo[vfo].pRX->Frequency);  // dBm + per-freq ring reset
 			RSSI_HISTOGRAM_Update(vfo, gVFO_RSSI[vfo]);             // dBm: bins now work
 			SIGNAL_CLASSIFIER_Update(vfo, gVFO_RSSI[vfo]);          // dBm: +-3 threshold calibrated
-			DUAL_WATCH_MGMT_Update(vfo, gVFO_RSSI[vfo], true);
 
-			// Log RF activity on squelch open (transition into RX)
 			if (!was_receiving) {
-				uint16_t ctcss = 0;
-				if (gRxVfo->pRX->CodeType == CODE_TYPE_CONTINUOUS_TONE && gRxVfo->pRX->Code < 50)
-					ctcss = CTCSS_Options[gRxVfo->pRX->Code];
-				ACTIVITY_LOG_Add(gRxVfo->pRX->Frequency, gVFO_RSSI[vfo], ctcss, SIGNAL_QUALITY_Get());
-				DUAL_WATCH_MGMT_ReportActivity(vfo);
+				s_rx_vfo = vfo;
+				s_rx_duration_10ms = 0;
 			}
-
-			// Update activity log uptime (every 100 ticks = 1 second)
-			static uint16_t activity_uptime_counter = 0;
-			if (++activity_uptime_counter >= 100) {
-				ACTIVITY_LOG_UpdateUptime();
-				activity_uptime_counter = 0;
-			}
+			if (s_rx_duration_10ms < 0xFFFF) s_rx_duration_10ms++;
+		} else if (was_receiving) {
+			// === VUURWERK v1.2.7 dual-watch activity-weighted by RX duration ===
+			DUAL_WATCH_MGMT_ReportActivity(s_rx_vfo, s_rx_duration_10ms);
 		}
 
 		was_receiving = is_receiving;
 	}
-
-	// Status line updates
-	if (gScreenToDisplay == DISPLAY_MAIN) {
-		STATUS_LINE_SetContext(STATUS_CONTEXT_IDLE);
-	} else if (gCurrentFunction == FUNCTION_RECEIVE) {
-		STATUS_LINE_SetContext(STATUS_CONTEXT_RX);
-	} else if (gCurrentFunction == FUNCTION_TRANSMIT) {
-		STATUS_LINE_SetContext(STATUS_CONTEXT_TX);
-	}
-	STATUS_LINE_Update();
 
 	CheckKeys();
 }
@@ -1446,6 +1466,10 @@ void APP_TimeSlice500ms(void)
 	}
 #endif
 
+	// === VUURWERK v1.2.7 Backlight TX/RX activity refresh ===
+	BACKLIGHT_FADE_ArmDuringActivity();
+	// === END VUURWERK ===
+
 	if (gBacklightCountdown_500ms > 0 && !gAskToSave && !gCssBackgroundScan
 		// don't turn off backlight if user is in backlight menu option
 		&& !(gScreenToDisplay == DISPLAY_MENU && (UI_MENU_GetCurrentMenuId() == MENU_ABR || UI_MENU_GetCurrentMenuId() == MENU_ABR_MAX))
@@ -1454,6 +1478,18 @@ void APP_TimeSlice500ms(void)
 	) {
 		BACKLIGHT_TurnOff();
 	}
+
+	// === VUURWERK v1.2.6 Live battery voltage during TX ===
+	BATTERY_TX_MONITOR_Tick500ms();
+	// === END VUURWERK ===
+
+	// === VUURWERK v1.2.7 TX battery sag tracker ===
+	BATTERY_SAG_Tick500ms();
+	// === END VUURWERK ===
+
+	// === VUURWERK v1.2.7 Backlight fade-out tail ===
+	BACKLIGHT_FADE_Tick500ms();
+	// === END VUURWERK ===
 
 	if (gReducedService)
 	{
@@ -1579,6 +1615,17 @@ void APP_TimeSlice500ms(void)
 
 	BATTERY_TimeSlice500ms();
 	SCANNER_TimeSlice500ms();
+	// === VUURWERK v1.2.5 CSS scan soft-timeout watchdog
+	// (v1.2.7 tightened 120 -> 60 ticks = 60 s -> 30 s; with the
+	// pre-flight RSSI gate, 1-confirmation CTCSS, and 120 ms dwell,
+	// typical successful scans complete in 3-10 s) ===
+	if (gScanCssState == SCAN_CSS_STATE_SCANNING && gScanProgressIndicator > 60) {
+		gScanCssState  = SCAN_CSS_STATE_FAILED;
+		gBeepToPlay    = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
+		gUpdateStatus  = true;
+		gUpdateDisplay = true;
+	}
+	// === end VUURWERK ===
 	UI_MAIN_TimeSlice500ms();
 
 #ifdef ENABLE_DTMF_CALLING
@@ -1880,6 +1927,38 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 #endif
 	) {
 		ACTION_Handle(Key, bKeyPressed, bKeyHeld);
+
+		// === VUURWERK v1.2.5 side-button toast feedback ===
+		// Mirror the action.c trigger logic: a short-press fires when
+		// the key is released without prior hold (bKeyHeld=0,
+		// bKeyPressed=0); a long-press fires on the held event
+		// (bKeyHeld=1, bKeyPressed=1). On either firing, look up the
+		// EEPROM-mapped action and emit the matching toast.
+		{
+			enum ACTION_OPT_t fired = ACTION_OPT_NONE;
+			if (!bKeyHeld && !bKeyPressed) {
+				if      (Key == KEY_SIDE1) fired = gEeprom.KEY_1_SHORT_PRESS_ACTION;
+				else if (Key == KEY_SIDE2) fired = gEeprom.KEY_2_SHORT_PRESS_ACTION;
+			} else if (bKeyHeld && bKeyPressed) {
+				if      (Key == KEY_SIDE1) fired = gEeprom.KEY_1_LONG_PRESS_ACTION;
+				else if (Key == KEY_SIDE2) fired = gEeprom.KEY_2_LONG_PRESS_ACTION;
+				else if (Key == KEY_MENU)  fired = gEeprom.KEY_M_LONG_PRESS_ACTION;
+			}
+			VUURWERK_SideToast(fired);
+
+			// Long-press fire gets a higher, shorter blip so
+			// eyes-off operation can distinguish a fired
+			// long-press from a short tap by ear alone.
+			// Stock ACTION_Handle has already set
+			// BEEP_1KHZ_60MS_OPTIONAL for this event; we
+			// override only when the firing was a held
+			// event AND a binding exists (NONE stays
+			// stock-silent so deliberate empty bindings
+			// behave unchanged).
+			if (bKeyHeld && bKeyPressed && fired != ACTION_OPT_NONE)
+				gBeepToPlay = BEEP_880HZ_40MS_OPTIONAL;
+		}
+		// === END VUURWERK ===
 	}
 	else if (!bKeyHeld && bKeyPressed) {
 		gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;

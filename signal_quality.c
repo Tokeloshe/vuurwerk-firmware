@@ -1,34 +1,34 @@
 /* Copyright (c) 2026 James Honiball (KC3TFZ)
- * 
+ *
  * This file is part of VUURWERK and is dual-licensed:
  *   1. GPL v3 (when distributed as part of the VUURWERK firmware)
  *   2. Commercial license available from the author
- * 
- * You may not extract, repackage, or redistribute this file 
- * independently under any license other than GPL v3 as part 
+ *
+ * You may not extract, repackage, or redistribute this file
+ * independently under any license other than GPL v3 as part
  * of the complete VUURWERK firmware, without written permission
  * from the author.
+ *
+ * Commercial licensing inquiries: jhoniball4@gmail.com
  */
 
 #include "signal_quality.h"
 
-RssiHistory_t gRssiHistory = {
-	.history = {0},
-	.index = 0,
-	.count = 0
-};
+RssiHistory_t gRssiHistory;
 
-void SIGNAL_QUALITY_Init(void)
+// Last RX frequency seen at Update time; a change discards the
+// stale ring buffer so variance reflects within-channel noise
+// rather than the inter-channel RSSI delta during VFO flips.
+static uint32_t last_frequency = 0;
+
+void SIGNAL_QUALITY_Update(int16_t rssi_dBm, uint32_t frequency)
 {
-	for (uint8_t i = 0; i < RSSI_HISTORY_SIZE; i++)
-		gRssiHistory.history[i] = 0;
+	if (frequency != last_frequency) {
+		last_frequency = frequency;
+		gRssiHistory.index = 0;
+		gRssiHistory.count = 0;
+	}
 
-	gRssiHistory.index = 0;
-	gRssiHistory.count = 0;
-}
-
-void SIGNAL_QUALITY_Update(int16_t rssi_dBm)
-{
 	// Add to ring buffer
 	gRssiHistory.history[gRssiHistory.index] = rssi_dBm;
 	gRssiHistory.index = (gRssiHistory.index + 1) & 7;  // % 8 via AND

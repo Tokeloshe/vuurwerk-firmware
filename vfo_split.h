@@ -1,13 +1,15 @@
 /* Copyright (c) 2026 James Honiball (KC3TFZ)
- * 
+ *
  * This file is part of VUURWERK and is dual-licensed:
  *   1. GPL v3 (when distributed as part of the VUURWERK firmware)
  *   2. Commercial license available from the author
- * 
- * You may not extract, repackage, or redistribute this file 
- * independently under any license other than GPL v3 as part 
+ *
+ * You may not extract, repackage, or redistribute this file
+ * independently under any license other than GPL v3 as part
  * of the complete VUURWERK firmware, without written permission
  * from the author.
+ *
+ * Commercial licensing inquiries: jhoniball4@gmail.com
  */
 
 #ifndef VFO_SPLIT_H
@@ -60,35 +62,21 @@ typedef struct {
 
 // VFO B scan state
 typedef struct {
-	// Configuration
 	SplitMode_t mode;
 	BScanSource_t source;
 	BScanSpeed_t speed;
-	bool alert_beep;
 
-	// Runtime state
-	bool vfo_b_active;
 	uint16_t hop_timer_ms;
-	uint16_t settle_timer_ms;
 
-	// Scan position
 	uint8_t current_channel;
 	uint32_t current_freq_10Hz;
 	uint16_t scan_progress;
 
-	// Frequency range scan settings
 	uint32_t range_start_10Hz;
 	uint32_t range_end_10Hz;
 	uint32_t range_step_10Hz;
 
-	// Activity tracking
 	BScanAlert_t alert;
-	uint16_t hits_this_session;
-	uint32_t last_hit_freq_10Hz;
-	uint16_t last_hit_time_s;
-
-	// State preservation flag
-	bool saved_vfo_a_state;
 } VfoSplit_t;
 
 extern VfoSplit_t gVfoSplit;
@@ -102,27 +90,9 @@ extern VfoSplit_t gVfoSplit;
 #define ALERT_DISPLAY_TIME_MS 5000
 #define RSSI_THRESHOLD_DBM   -100
 
-void VFO_SPLIT_Init(void);
-
-// Configuration
-void VFO_SPLIT_SetMode(SplitMode_t mode);
-void VFO_SPLIT_SetSource(BScanSource_t source);
-void VFO_SPLIT_SetSpeed(BScanSpeed_t speed);
-void VFO_SPLIT_SetAlertBeep(bool enabled);
-void VFO_SPLIT_SetRange(uint32_t start_10Hz, uint32_t end_10Hz, uint32_t step_10Hz);
-
-// Main process function — call every 10ms tick from main loop
-// ONLY active during FUNCTION_FOREGROUND
+// Main process function: call every 10ms tick from main loop.
+// ONLY active during FUNCTION_FOREGROUND. Activation is wired through
+// direct gVfoSplit writes in app/menu.c MENU_SCANWATCH case.
 void VFO_SPLIT_Process(void);
-
-// Status queries
-void VFO_SPLIT_GetStatus(uint8_t *channel, uint32_t *freq, uint8_t *progress);
-BScanAlert_t* VFO_SPLIT_GetAlert(void);
-void VFO_SPLIT_ClearAlert(void);
-void VFO_SPLIT_SwitchToB(void);
-void VFO_SPLIT_Reset(void);
-uint16_t VFO_SPLIT_GetHitCount(void);
-uint32_t VFO_SPLIT_GetLastHitFreq(void);
-uint16_t VFO_SPLIT_GetLastHitTime(void);
 
 #endif // VFO_SPLIT_H

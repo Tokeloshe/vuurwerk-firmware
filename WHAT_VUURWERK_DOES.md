@@ -1,8 +1,24 @@
 # What VUURWERK Actually Does
 
-**v1.2.3: Plain English Guide to Every Feature**
+**v1.2.7: Plain English Guide to Every Feature**
 
-VUURWERK is custom firmware for the Quansheng UV-K5 radio. It keeps everything the stock radio does, then adds 27 features on top, all fitting in the same 60KB of flash memory. Here's what each one does and why it matters.
+VUURWERK is custom firmware for the Quansheng UV-K5 radio. It keeps everything the stock radio does, then adds 41 features on top, all fitting in the same 60KB of flash memory. Here's what each one does and why it matters.
+
+## Changes since v1.2.6
+
+v1.2.7 fixed the SIDE2 long-press binding that operators found wrong in practice. SIDE2 is now symmetric with SIDE1: short press is one freq-down step, hold is continuous auto-repeat. Backlight toggle is no longer accessible from spectrum view (use EXIT + main-screen gesture + F+5 to re-enter).
+
+v1.2.7 also rebuilt the CSS scanner for reliability: a pre-flight RSSI gate aborts with `NO SIGNAL` on dead air, CTCSS now locks in one confirmation (matching DCS), dwell time dropped to 120 ms, and the soft-timeout tightened to 30 seconds.
+
+See the "v1.2.7 Changes" and "v1.2.6 Changes" subsections at the bottom of this document, plus Sections 6 and 7 of USER_MANUAL.md for the full operator-facing details.
+
+## Changes since v1.2.5
+
+v1.2.6 reorganized the spectrum analyzer side-button keymap (Blacklist moved from SIDE1 to MENU; SIDE1 became freq UP; the v1.2.6 SIDE2 freq DOWN / long-press-backlight binding was later reverted in v1.2.7 to plain freq DOWN with auto-repeat).
+
+## Changes since v1.2.4
+
+Activity Log retired in v1.2.5 (Feature #27 slot intentionally empty). The 128x64 LCD couldn't show enough log context to be useful in HT form factor, and the operator's hands are typically occupied with the radio while a log entry would be most relevant. Numbering jumps from #26 to #28 below.
 
 ---
 
@@ -75,7 +91,11 @@ VUURWERK is custom firmware for the Quansheng UV-K5 radio. It keeps everything t
 
 ## Spectrum Analyzer (4 Modes)
 
-The spectrum analyzer scans a range of frequencies and shows what's active. Press the Star key to cycle through four display modes:
+The spectrum analyzer scans a range of frequencies and shows what's active. Press the Star key to cycle through four display modes.
+
+**Side-button keymap (v1.2.7).** Inside the spectrum view, SIDE1 short / hold = step frequency UP (auto-repeats while held), SIDE2 short / hold = step frequency DOWN (auto-repeats while held, symmetric with SIDE1), MENU short = blacklist current peak bin. UP / DOWN keep their mode-aware behaviour: frequency step in NORM / PEAK / MTI, voice-hop in VOX. ToggleBacklight is no longer accessible from spectrum view -- press EXIT, toggle the backlight from the main screen, then F+5 to re-enter spectrum.
+
+Press the Star key to cycle through four display modes:
 
 ### 18. NORM: Normal Spectrum
 **What it does:** Standard spectrum display. Each frequency bin shows a bar proportional to signal strength. Simple, clean, effective.
@@ -89,7 +109,7 @@ The spectrum analyzer scans a range of frequencies and shows what's active. Pres
 ### 21. VOX: Voice-Seeking Spectrum
 **What it does:** The headline feature of VUURWERK v1.2.0. Instead of showing all signals equally, it identifies which ones are likely carrying voice. For each frequency bin, it reads the radio chip's noise indicator alongside the signal strength. Clean audio with a strong signal scores high. Noisy, weak, or interference-heavy bins score low.
 
-The display shows confidence: bins with no voice get just a floor dot. Low-confidence bins get half-height bars. High-confidence bins get full-height bars. Press UP or DOWN to hop directly to the next bin with likely voice activity; the radio tunes there and lets you listen, then resumes scanning when the signal drops.
+The display shows confidence (v1.2.6): bins below the hop threshold of 50 show just a floor dot. Bins with voice probability 50 to 74 show half-height bars. Bins with voice probability 75 or higher show full-height bars. Every visible bar gets a 1-pixel marker tick at the very top of the spectrum display so the hop-eligible bins form a clear row of dots independent of bar height. Press UP or DOWN to hop directly to the next hop-eligible bin (skipping any you have blacklisted with MENU); the radio tunes there and lets you listen, then resumes scanning when the signal drops.
 
 ---
 
@@ -110,8 +130,90 @@ The display shows confidence: bins with no voice get just a floor dot. Low-confi
 ### 26. Categorized Menu
 **What it does:** The stock radio has 60+ menu items in one flat list. VUURWERK organizes them into 7 categories: Receive, Tone, Transmit, Scan, Channel, Config, and a hidden Unlock category. You scroll through categories first, then items within. Finding settings takes seconds instead of minutes.
 
-### 27. Activity Log
-**What it does:** Records RF activity every time the squelch opens. Each entry captures the frequency, signal strength (RSSI in dBm), CTCSS tone (if present), signal quality rating, and duration. The 20-entry ring buffer acts as a logbook of what the radio has heard during the current session. If the same frequency is heard again within 10 seconds, the existing entry is updated with the better signal reading rather than creating a duplicate. Radio uptime is tracked in a separate counter that increments once per second during reception.
+---
+
+## v1.2.5+ Additions
+
+### 28. Side-Button Toast Feedback
+**What it does:** The 1-second toast overlay that confirms F+key shortcuts now also fires for SIDE1, SIDE2, and long-press MENU presses. Whichever shortcut path you used, the radio answers the same way. Closes the UX-parity gap where F+key actions had visible confirmation but side-button actions executed silently.
+
+### 29. Toast Notification Subsystem
+**What it does:** The toast popup engine extracted into its own module. Same 1-second centered overlay, same 10ms tick decrement, now reusable from any caller. Powers the F+key shortcut feedback, the side-button feedback (Feature #28), the F-hold lock toast, and the scan-state toasts.
+
+### 30. Scan Rate Telemetry
+**What it does:** While scanning, the status line now shows the live channels-per-second sweep rate. A rolling 100-tick counter measures how fast the scanner is actually advancing through channels and the renderer appends "NNc/s" to the SCANNING text. Lets you see at a glance whether scanning is healthy or whether something has slowed it down.
+
+### 31. F-Key UX Hardening
+**What it does:** Three small reliability fixes wrapped around the F-key dispatch path. Long-pressing F (the keypad lock gesture) now toasts "LOCKED" or "UNLOCKED" so you can tell whether the lock actually toggled. F+3 (VFO/MR toggle) toasts "NO CHANNELS" when memory mode is empty instead of the misleading "VFO MODE" stock behavior. F+STAR (CSS scanner) is now gated to FM mode only and toasts "FM ONLY" if you try it in AM or USB, because the BK4819 CTCSS detector only populates in FM and the scan would otherwise loop forever. STAR long-hold (scan toggle) gets its own "SCAN ON" / "SCAN OFF" toast.
+
+### 32. Flashlight Auto-Off Watchdog
+**What it does:** A forgotten flashlight in a pocket will drain a UV-K5 pack overnight on every stock fork. VUURWERK ticks a watchdog every 10ms in software (no hardware timer added) and extinguishes the flashlight after 30 minutes of unattended ON or BLINK. SOS mode is preserved indefinitely because that's emergency signaling. On a low-battery pack (battery indicator level 2 or lower) the timeout shortens to 10 minutes so a half-drained pack doesn't get fully drained by a forgotten LED. Mode changes reset the timer so tapping the flashlight key extends the session. Standard watchdog technique, original implementation for the UV-K5 platform.
+
+### 33. CSS Scan Soft-Timeout Watchdog
+**What it does:** Companion to Feature #31's F+* gate. If a CSS scan is launched and runs for 60 seconds without finding a tone (the FM-with-no-tones-present trap that even the gate cannot fully prevent), this watchdog flips the scanner state to FAILED and queues an audible double-beep. The stock scanner state machine handles BK4819 teardown via its existing default branch. Closes the unbounded-scan trap that egzumer's binary `ENABLE_NO_CODE_SCAN_TIMEOUT` flag turns into either 16 seconds or forever.
+
+### 34. Audio Palette: VOX-Hop "Found Voice" Two-Tone Chord
+**What it does:** In VOX spectrum mode (Feature #21), when the voice-hop search finds a bin with high voice probability, the radio plays a short ascending two-tone chord (800 Hz then 1200 Hz) so you hear that a hop happened before the audio from the new bin even starts. Companion to the existing rejection idiom: on a sweep that finishes without finding voice, the radio plays a soft 500 Hz double-beep instead, so silence never leaves you wondering whether the keypress registered.
+
+### 35. Boot-Time Hardware Health Probe
+**What it does:** When the radio powers on, before the welcome screen renders, it runs a two-part health check. First it reads BK4819 register 0x00 after init and looks for the wedged-SPI 0xFFFF signature, which means the transceiver chip is not responding. Then it reads the factory battery-calibration page in EEPROM and looks for an all-0xFF byte pattern, which means the calibration is blank or the I2C bus is wedged. Either fault surfaces as a specific welcome banner: "BK4819 FAULT / RX/TX disabled" or "EEPROM FAULT / calib lost".
+
+### 36. Live Battery Voltage During TX
+**What it does:** Stock firmware freezes the battery indicator the instant you press PTT and only updates it when you release. VUURWERK adds a 500ms tick during transmit that advances the existing battery-voltage ring buffer and recomputes the on-screen battery percent and icon. You see voltage sag in real time as you transmit. Closes a long-standing gap in the stock firmware.
+
+### 37. Backlight Fade-Out Tail
+**What it does:** When the backlight idle timer expires, stock firmware cuts the backlight to black instantly. VUURWERK ramps it down over 2 seconds via the existing PWM brightness API so the screen tapers off smoothly. Original implementation of a standard backlight-fade UX pattern, adapted to the BK4819 platform's PWM constraints.
+
+### 38. Backlight TX/RX Activity Refresh
+**What it does:** Companion to Feature #37. If you have the per-mode "backlight on TX" or "backlight on RX" setting enabled, VUURWERK re-arms the backlight countdown every 500ms while you are actually transmitting or receiving, so the screen never goes dark mid-conversation. The stock firmware's one-shot backlight-on at TX/RX entry would still time out mid-call; this extends that to a hold-for-duration. Operators historically worked around this by setting backlight-always-on at the cost of battery life. VUURWERK now keeps it lit only when needed.
+
+### 39. TX Battery Sag Delta Tracker
+**What it does:** Each time you transmit, the radio records the battery voltage at PTT press, watches for the minimum during transmit, and at PTT release computes the sag delta in 10mV units. The About screen shows the most recent delta as "TX sag NNNNmV". Lets you see whether your pack is healthy (small sag) or worn out (large sag) without test equipment. Per-TX battery accounting, original to VUURWERK.
+
+### 40. CSS Scan Status-Bar Glyph
+**What it does:** A small "Cs" glyph in the status bar tells you a CSS scan is running, distinct from the existing channel-scan and SCAN+WATCH glyphs. Three concurrent scan types are now visually distinguishable at a glance.
+
+### 41. CSS Scan FOUND Beep
+**What it does:** When the CSS scanner locks onto a tone, the radio emits a single 1 kHz beep on the FOUND state edge. Symmetric with Feature #33's failure cue. Both the F+* path (from the main screen) and the menu path (R_CTCS / R_DCS submenus) trigger the same beep. A one-byte BSS latch prevents repeated beeping while the FOUND state persists.
+
+### 42. Quiet Backlight PWM
+**What it does:** Stock backlight PWM runs at about 1 kHz, which sits right in the middle of the audio passband and bleeds an audible whine into outbound TX audio whenever the screen is dimmed during transmit. VUURWERK reprograms the PWM prescaler at boot to push the carrier up to about 6.7 kHz, well above the 3 kHz audio passband. The whine drops below noise floor. kamilsss655's NUNU fork demonstrated this technique in 2024 via stock-driver source modification; VUURWERK ports the same fix as a LAW-1-safe one-line hook in main.c so the driver stays byte-identical with the egzumer parent.
+
+---
+
+## v1.2.7 Changes
+
+### SIDE2 keymap symmetry fix
+**What it does:** v1.2.6 bound SIDE2 short-press to freq-down with a 640 ms long-press for backlight toggle, on the theory of "clean short/long separation." Operators found this wrong: SIDE1 hold gives continuous freq-up auto-repeat, but holding SIDE2 toggled the backlight instead. v1.2.7 makes SIDE2 symmetric with SIDE1: short press is one freq-down step, hold is continuous freq-down auto-repeat. Backlight toggle is no longer reachable from inside spectrum view; use EXIT, main-screen toggle, F+5 to re-enter. The keymap state-machine code (release-dispatch + hold counter + dual-binding latch) is gone, simplifying the input loop.
+
+### CSS scanner robustness
+**What it does:** the CSS scanner was unreliable in v1.2.5 / v1.2.6 -- operators reported it rarely locked onto tones. v1.2.7 rebuilt it with four changes:
+- Pre-flight RSSI gate: before launching the BK4819 scan engine, the scanner samples RSSI on the current frequency. Below carrier-present threshold (~-110 dBm) the scan aborts with a `NO SIGNAL` toast and 500 Hz double-beep. Park on an active carrier before scanning.
+- CTCSS now locks on first confirmation (was 2). The asymmetry with DCS (which already locked on first confirmation) made CTCSS feel broken; with the pre-flight gate plus the BK4819 detector's internal voting, single-match is reliable.
+- Dwell time reduced from 210 ms to 120 ms. The BK4819 detector converges in ~80-120 ms for the worst-case low CTCSS tones; 210 ms was over-conservative.
+- Soft-timeout tightened from 60 s to 30 s. Typical successful scans now complete in 3-10 s; 30 s is the new "fruitless" cap.
+
+### Economic re-engineering
+**What it does:** to offset the SIDE2 state-machine removal and CSS work cost, v1.2.7 reclaimed bytes from VUURWERK feature modules. Five dead-code / redundant-init / API-tightening passes: TX_COMPRESSOR_GetGainReduction removed (zero callers, dead code), RSSI_HISTOGRAM_Init removed (BSS zero-init covers it), GAIN_STAGING_Reset made static (zero external callers, LTO inlines), bandscope.c parallel memmoves consolidated, SIGNAL_CLASSIFIER_Init removed (BSS zero-init covers it). Plus one CSS-scanner-scoped consolidation: the CDCSS and CTCSS arms in SCANNER_TimeSlice10ms became structurally identical after the 1-confirmation change and were merged. Net flash freed ~200 bytes vs v1.2.6.
+
+### License header enforcement sweep
+**What it does:** every VUURWERK-original module now carries the canonical dual-license header with the commercial-licensing contact line. The LICENSE Dual-Licensing Notice section now explicitly enumerates what "outside the complete VUURWERK firmware" means (extraction, porting, repackaging, commercial use). README gained a License section near the top with operator-facing summary. The contributions registry in LICENSE is unchanged (LAW 7). Zero flash impact -- comments only.
+
+---
+
+## v1.2.6 Changes
+
+### Spectrum view keymap reorganization
+**What it does:** Inside the spectrum analyzer, SIDE1 now steps frequency UP (with auto-repeat when held), SIDE2 now steps frequency DOWN (release-dispatched, no auto-repeat), long-press SIDE2 (about 640 ms) toggles the backlight, and short-press MENU blacklists the current peak bin. UP / DOWN still voice-hop in VOX and frequency-step in NORM / PEAK / MTI, exactly as before. Operators upgrading from v1.2.5 will need to relearn that SIDE1 and SIDE2 are now the universal frequency-step controls (was: SIDE1=blacklist, SIDE2=backlight). Short-press and long-press are unambiguously separated on SIDE2: the freq-down on release is suppressed when the long-press fires, so you never get a stray step when you wanted to toggle the backlight.
+
+### Voice-hop blacklist respect
+**What it does:** With Blacklist now moving to MENU (more accessible than the old SIDE1 binding), the VOX UP / DOWN voice-hop loop also now skips bins you have blacklisted. Previously a blacklisted bin with strong voice probability would still be tuned by the hop.
+
+### Spectrum mode-change flash
+**What it does:** When you press STAR to cycle modes (NORM / PEAK / MTI / VOX), a brief `MODE <name>` overlay appears in the middle of the spectrum display for about half a second, in addition to the permanent small label in the top-right corner. Operators who report only ever seeing "NORM" get a clear confirmation that the mode actually changed.
+
+### VOX bar threshold matches hop threshold
+**What it does:** In VOX mode, bins with voice probability below 50 now drop to a floor dot (previously 35) and only bins at or above 50 draw any bar. Every visible bar is now a valid hop target. A 1-pixel marker tick at the very top of the spectrum display flags every hop-eligible bin, so the row of dots across the top tells you exactly where UP / DOWN can land.
 
 ---
 
