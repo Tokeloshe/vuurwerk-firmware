@@ -5,6 +5,15 @@ adapts, and responds like equipment ten times its price.**
 
 VUURWERK is Afrikaans for *fireworks*.
 
+[![Latest release](https://img.shields.io/github/v/release/Tokeloshe/vuurwerk-firmware?label=release&color=blue)](https://github.com/Tokeloshe/vuurwerk-firmware/releases/latest)
+[![Release date](https://img.shields.io/github/release-date/Tokeloshe/vuurwerk-firmware?label=released)](https://github.com/Tokeloshe/vuurwerk-firmware/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Tokeloshe/vuurwerk-firmware/total?label=downloads&color=success)](https://github.com/Tokeloshe/vuurwerk-firmware/releases)
+[![Latest downloads](https://img.shields.io/github/downloads/Tokeloshe/vuurwerk-firmware/latest/total?label=latest%20downloads)](https://github.com/Tokeloshe/vuurwerk-firmware/releases/latest)
+[![Stars](https://img.shields.io/github/stars/Tokeloshe/vuurwerk-firmware?style=flat)](https://github.com/Tokeloshe/vuurwerk-firmware/stargazers)
+[![Forks](https://img.shields.io/github/forks/Tokeloshe/vuurwerk-firmware?style=flat)](https://github.com/Tokeloshe/vuurwerk-firmware/network/members)
+[![Last commit](https://img.shields.io/github/last-commit/Tokeloshe/vuurwerk-firmware)](https://github.com/Tokeloshe/vuurwerk-firmware/commits/main)
+[![Issues](https://img.shields.io/github/issues/Tokeloshe/vuurwerk-firmware)](https://github.com/Tokeloshe/vuurwerk-firmware/issues)
+[![License](https://img.shields.io/github/license/Tokeloshe/vuurwerk-firmware)](LICENSE)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-Tokeloshe-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/Tokeloshe)
 
 ---
@@ -270,6 +279,27 @@ you can keep the bench powered and keep going on this:
 
 Prefer crypto, or want to help without spending a cent? See
 [DONATE.md](DONATE.md) for XRP and the free ways to support the project.
+
+---
+
+## Project Pulse
+
+Live numbers, straight from GitHub. Every badge above is a link.
+
+<p align="center">
+  <a href="https://star-history.com/#Tokeloshe/vuurwerk-firmware&Date">
+    <img src="https://api.star-history.com/svg?repos=Tokeloshe/vuurwerk-firmware&type=Date" alt="Star history" width="600">
+  </a>
+</p>
+
+| Release | Downloads |
+|---|---|
+| [v1.5.0](https://github.com/Tokeloshe/vuurwerk-firmware/releases/tag/v1.5.0) -- The Stabilization Release | ![](https://img.shields.io/github/downloads/Tokeloshe/vuurwerk-firmware/v1.5.0/total?label=) |
+| [v1.2.7](https://github.com/Tokeloshe/vuurwerk-firmware/releases/tag/v1.2.7) | ![](https://img.shields.io/github/downloads/Tokeloshe/vuurwerk-firmware/v1.2.7/total?label=) |
+| [v1.2.4](https://github.com/Tokeloshe/vuurwerk-firmware/releases/tag/v1.2.4) | ![](https://img.shields.io/github/downloads/Tokeloshe/vuurwerk-firmware/v1.2.4/total?label=) |
+
+Repository owners also get views, unique visitors, clones and referring sites
+under **Insights -> Traffic**.
 
 ---
 
