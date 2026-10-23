@@ -116,7 +116,8 @@ Save it:   MENU, then MENU again at SAVE? (RX and TX tone). On a
            memory channel you first pick the channel number, then
            MENU again.
 Menu scan: in RxCTCS or RxDCS press MENU, then STAR to scan;
-           MENU accepts the found tone.
+           MENU accepts the found tone. Your offset, TX tone and
+           power are untouched, so you can key up straight away.
 
 See also: USER_MANUAL.md, WHATS_NEW.md, FLASHING.md
 

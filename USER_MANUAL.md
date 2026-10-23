@@ -408,6 +408,10 @@ To save the found tone:
 
 The menu scan is FM only and not available in CROSS BAND; otherwise it double-beeps. The menu does not time out while the scan runs.
 
+> **Your repeater setup survives the scan.** The menu scan only touches the receive tone. Your offset, TX tone, power and everything else stay exactly as you set them, so you can find a repeater's tone and key up straight away.
+>
+> Worked example: you are on 146.940 with TxODir `-`, TxOffs `0.600` and TxCTCS `100.0`, and you want to hear the repeater too. Open Menu > TONE > RxCTCS, press MENU, then STAR, and wait for the repeater to key up. The scan lands on `100.0`; press MENU to accept. Press PTT: you transmit on 146.340 with the 100.0 tone, as before, and now you hear the repeater's output as well.
+
 ### Squelch tail elimination
 
 With Menu > TONE > STE set to ON the radio mutes the speaker the moment the other station's tone stops, so you do not hear the burst of noise as its carrier drops. It confirms the tone has really gone before muting, and waits a fraction longer on fluttery mobile signals so a brief fade does not cut live audio. One switch covers both CTCSS and DCS channels. RP STE adds a delay for repeaters that hold their carrier after the tone stops.

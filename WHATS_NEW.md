@@ -137,8 +137,10 @@ walkthrough is in [USER_MANUAL.md](USER_MANUAL.md#8-patrol).
 
 ### Tone scans
 
-- MENU into RxCTCS or RxDCS, then STAR, no longer clears your offset, TX
-  tone and power; the VFO is put back the moment the scan ends.
+- **Find a repeater's tone without losing your repeater setup.** MENU into
+  RxCTCS or RxDCS, then STAR, scans for the receive tone and nothing else:
+  your offset, TX tone and power stay as you set them, so you can accept the
+  tone and key up straight away. (Before, the scan cleared them.)
 - A found tone lands on the right item (RxCTCS or RxDCS) and beeps.
 - The menu does not time out while its scan runs; in plain CROSS BAND the
   scan is refused with a double beep.

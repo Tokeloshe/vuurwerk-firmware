@@ -227,7 +227,7 @@ Full detail: [USER_MANUAL.md](USER_MANUAL.md#vox-mode) and the
 | F-key shortcuts | F+0 to F+9 | one press for the things you change often |
 | Categorised menu | MENU | six groups, number keys jump straight in, a hint line explains items |
 | Calling frequency | F+9 | jump to the band's calling frequency |
-| Tone scan | F+STAR | finds a repeater's CTCSS or DCS code |
+| Tone scan | F+STAR, or STAR inside RxCTCS | finds a repeater's CTCSS or DCS code; the menu scan leaves your offset and TX tone untouched, so you can key up the moment it lands |
 | Live battery during TX | automatic | the icon keeps updating while you talk; `SAG` warns of a tired pack |
 | Flashlight watchdog | side key | the LED cannot drain a pocketed radio overnight |
 | Backlight fade | automatic | fades out instead of cutting to black |
