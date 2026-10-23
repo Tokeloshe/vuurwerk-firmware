@@ -5,6 +5,9 @@ adapts, and responds like equipment ten times its price.**
 
 VUURWERK is Afrikaans for *fireworks*.
 
+[![Latest release](https://img.shields.io/github/v/release/Tokeloshe/vuurwerk-firmware?label=release&color=blue)](https://github.com/Tokeloshe/vuurwerk-firmware/releases/latest)
+[![Downloads of the latest release](https://img.shields.io/github/downloads/Tokeloshe/vuurwerk-firmware/latest/total?label=downloads%20(latest)&color=success)](https://github.com/Tokeloshe/vuurwerk-firmware/releases/latest)
+[![Downloads, all releases](https://img.shields.io/github/downloads/Tokeloshe/vuurwerk-firmware/total?label=downloads%20(all)&color=success)](https://github.com/Tokeloshe/vuurwerk-firmware/releases)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-Tokeloshe-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/Tokeloshe)
 
 ---
