@@ -11,7 +11,7 @@ command-line alternative, the fault banners you might see, and recovery.
 | Quansheng UV-K5 V1 | The original board; see the hardware check below |
 | Kenwood-style 2-pin programming cable | The same cable CHIRP uses |
 | Google Chrome | The browser flasher needs Web Serial; Firefox and Safari do not have it |
-| The firmware file | [`release/vuurwerk-v1.5.1.packed.bin`](release/vuurwerk-v1.5.1.packed.bin) |
+| The firmware file | [`vuurwerk-v1.5.1.packed.bin`](https://github.com/Tokeloshe/vuurwerk-firmware/releases/latest/download/vuurwerk-v1.5.1.packed.bin) |
 
 ## The flashing flow
 
@@ -42,7 +42,7 @@ command-line alternative, the fault banners you might see, and recovery.
 
 ## Step by step
 
-1. **Download** `vuurwerk-v1.5.1.packed.bin` from the `release/` folder.
+1. **Download** [`vuurwerk-v1.5.1.packed.bin`](https://github.com/Tokeloshe/vuurwerk-firmware/releases/latest/download/vuurwerk-v1.5.1.packed.bin) from the latest release.
 2. **Turn the radio off.**
 3. **Hold PTT** and turn the radio on while still holding it. The flashlight
    LED turns on: that is the bootloader saying it is ready.

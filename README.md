@@ -337,7 +337,7 @@ features. See [LICENSE](LICENSE) for the original-contributions registry and
    boot screen
 ```
 
-1. Download [`vuurwerk-v1.5.1.packed.bin`](release/vuurwerk-v1.5.1.packed.bin)
+1. Download [`vuurwerk-v1.5.1.packed.bin`](https://github.com/Tokeloshe/vuurwerk-firmware/releases/latest/download/vuurwerk-v1.5.1.packed.bin)
    from the `release/` folder
 2. Turn the radio off
 3. Hold PTT and turn it on; the flashlight LED confirms bootloader mode
