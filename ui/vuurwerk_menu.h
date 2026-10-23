@@ -46,9 +46,6 @@ const char* VUURWERK_MENU_GetCategoryName(uint8_t cat);
 uint8_t  VUURWERK_MENU_GetVisibleCategoryCount(void);
 uint8_t  VUURWERK_MENU_GetCategoryForMenuId(uint8_t menu_id);
 
-// v1.3.1 (U3): plain-language hint for cryptic items (3x5 mini font, menu
-// row 6), or NULL when the item has none and the category/position line
-// should render as before.
 const char* VUURWERK_MENU_GetHint(uint8_t menu_id);
 
 // Build filtered item list for a category

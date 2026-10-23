@@ -27,7 +27,7 @@ typedef struct {
 	uint8_t  makeup_gain;    // 0-10
 } CompressorConfig_t;
 
-extern CompressorConfig_t gCompressorConfig;
+// v1.5.1: gCompressorConfig is private to tx_compressor.c (static const).
 
 void TX_COMPRESSOR_Start(void);    // Called once at TX start
 void TX_COMPRESSOR_Process(void);  // Called every 10ms during TX

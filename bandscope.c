@@ -79,13 +79,11 @@ void BANDSCOPE_Render(uint8_t *framebuffer_line) {
 
 	for (uint8_t i = 0; i < 128; i++) {
 		// Current signal bar
-		uint8_t sig_h = current_data[i] >> 5;
-		if (sig_h > 7) sig_h = 7;
+		uint8_t sig_h = current_data[i] >> 5;   // 0..7 by construction
 		uint8_t sig_mask = (1 << sig_h) - 1;
 
 		// Peak hold dot
 		uint8_t peak_h = peak_data[i] >> 5;
-		if (peak_h > 7) peak_h = 7;
 		uint8_t peak_mask = 0;
 		if (peak_h > sig_h)
 			peak_mask = 1 << peak_h;
@@ -93,7 +91,7 @@ void BANDSCOPE_Render(uint8_t *framebuffer_line) {
 		// Noise floor dotted line (every 4 pixels)
 		uint8_t nf_mask = 0;
 		uint8_t nf_h = noise_floor_level >> 5;
-		if ((i & 3) == 0 && nf_h > 0 && nf_h <= 7)
+		if ((i & 3) == 0 && nf_h > 0)
 			nf_mask = 1 << nf_h;
 
 		framebuffer_line[i] = sig_mask | peak_mask | nf_mask;

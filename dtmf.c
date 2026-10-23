@@ -6,13 +6,7 @@
 #include <string.h>
 
 // Stub global variables
-// VUURWERK v1.3.0 (F11): 14 dashes, not 15 -- a 15-char literal exactly
-// fills char[15] and legally drops the NUL, shipping an unterminated
-// array that only stock main.c's boot-time memset happened to repair.
-char gDTMF_String[15] = "--------------";
 char gDTMF_InputBox[15] = "";
-uint8_t gDTMF_InputBox_Index = 0;
-bool gDTMF_InputMode = false;
 char gDTMF_RX_live[20] = "";
 uint8_t gDTMF_RX_live_timeout = 0;
 // DTMF_RX_live_timeout_500ms is defined in misc.c, not here
@@ -24,8 +18,6 @@ uint8_t gDTMF_ReplyState = 0;
 
 // Stub function implementations
 void DTMF_clear_input_box(void) {
-	gDTMF_InputBox_Index = 0;
-	gDTMF_InputMode = false;
 }
 
 void DTMF_Append(char c) {

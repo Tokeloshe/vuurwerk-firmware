@@ -30,6 +30,9 @@
 #include "version.h"
 
 #include "app/app.h"
+#ifdef ENABLE_SPECTRUM
+	#include "app/spectrum.h"   // VUURWERK v1.5.1 (F2): PatrolLoadSettings
+#endif
 #include "bsp/dp32g030/gpio.h"
 #include "bsp/dp32g030/pwmplus.h"
 #include "bsp/dp32g030/syscon.h"
@@ -62,7 +65,7 @@
 #include "tx_soft_start.h"
 #include "vfo_split.h"
 #include "bandscope.h"
-#include "rssi_filter.h"
+// VUURWERK: G049 rssi_filter include removed
 #include "rssi_histogram.h"
 #include "signal_classifier.h"
 #include "dual_watch_mgmt.h"
@@ -117,6 +120,12 @@ void Main(void)
 	SETTINGS_WriteBuildOptions();
 	SETTINGS_LoadCalibration();
 
+#ifdef ENABLE_SPECTRUM
+	// VUURWERK v1.5.1 (F2): patrol settings are live from boot, so the menu
+	// never shows or rewrites an unloaded RAM copy.
+	PatrolLoadSettings();
+#endif
+
 	RADIO_ConfigureChannel(0, VFO_CONFIGURE_RELOAD);
 	RADIO_ConfigureChannel(1, VFO_CONFIGURE_RELOAD);
 
@@ -136,19 +145,11 @@ void Main(void)
 	// VUURWERK v1.0.9 initialization
 	// (v1.2.7: RSSI_HISTOGRAM_Init + SIGNAL_CLASSIFIER_Init dropped --
 	// BSS zero-init covers both cases at boot.)
-	RSSI_FILTER_Init();
+	// VUURWERK: G049 RSSI_FILTER_Init dropped with the unread RSSI filter
 	DUAL_WATCH_MGMT_Init();
 
-	// === VUURWERK v1.2.7 Quiet backlight PWM (raise carrier above audio passband) ===
-	// Stock backlight.c sets PWM carrier to ~1kHz which couples into the
-	// outbound mic preamp / PA supply rail and emits an audible whine to
-	// receiving stations whenever the operator's screen is dimmed during TX.
-	// Re-program the PWM_PLUS0 prescaler to ~6.7kHz (above the 3kHz audio
-	// passband). Mask preserves the lower 16-bit clock-source-select field
-	// that BACKLIGHT_InitHardware ORed in. NUNU bench-validated the same
-	// fix at the source-line level; LAW 1 keeps driver/backlight.c untouched.
-	PWM_PLUS0_CLKSRC = (PWM_PLUS0_CLKSRC & 0x0000FFFFu) | (7u << 16);
-	// === end VUURWERK v1.2.7 ===
+	// VUURWERK v1.2.7 quiet backlight PWM: now set in BACKLIGHT_InitHardware
+	// (driver/backlight.c, LAW 1B), same 6.7 kHz carrier.
 
 	const BOOT_Mode_t  BootMode = BOOT_GetMode();
 
@@ -204,7 +205,8 @@ void Main(void)
 
 		BACKLIGHT_TurnOn();
 
-		if (gEeprom.POWER_ON_DISPLAY_MODE != POWER_ON_DISPLAY_MODE_NONE)
+		// VUURWERK: G059 a fault banner is held even with POnMsg NONE
+		if (gEeprom.POWER_ON_DISPLAY_MODE != POWER_ON_DISPLAY_MODE_NONE || BOOT_HEALTH_HasFault())
 		{	// 2.55 second boot-up screen
 			while (boot_counter_10ms > 0)
 			{

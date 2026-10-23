@@ -1,5 +1,18 @@
 ===========================================================================
-IMPORTANT -- READ THIS FIRST
+VUURWERK Firmware -- LICENSE
+===========================================================================
+
+Contents
+
+  1. Important: read this first
+  2. Copyright and Attribution Notice
+  3. Registry of VUURWERK-original features
+  4. Dual-Licensing Notice
+  5. Third-Party Components
+  6. GNU General Public License, version 3 (full text)
+
+===========================================================================
+1. IMPORTANT -- READ THIS FIRST
 ===========================================================================
 
 The VUURWERK-original features, algorithms, and modules enumerated in this
@@ -23,7 +36,7 @@ Forking, building, modifying, and redistributing the COMPLETE VUURWERK
 firmware under GPL v3 terms remains free, as stated below.
 
 ===========================================================================
-VUURWERK Firmware — Copyright and Attribution Notice
+2. VUURWERK Firmware -- Copyright and Attribution Notice
 ===========================================================================
 
 Copyright (c) 2026 James Honiball (KC3TFZ)
@@ -37,6 +50,10 @@ based on work by DualTachyon, OneOfEleven, and fagci. The upstream
 code base is licensed under the Apache License, Version 2.0, as
 marked in each inherited source file.
 
+===========================================================================
+3. Registry of VUURWERK-original features
+===========================================================================
+
 VUURWERK-original contributions (designed and conceived by James Honiball).
 
   THE FOLLOWING ITEMS FALL UNDER COMMERCIAL LICENSING. Outside the
@@ -47,329 +64,249 @@ VUURWERK-original contributions (designed and conceived by James Honiball).
   complete VUURWERK firmware they are licensed under GPL v3 as a package.
   See the Dual-Licensing Notice below for the full terms.
 
-  - TX Audio Compressor: Real-time dynamic mic compression via REG_7D with
-    RMS detection over 40ms window, envelope following with configurable
-    attack (5ms) / release (300ms), and automatic gain reduction. No other
-    UV-K5 firmware has dynamic TX audio processing.
+  Each entry names the feature, says what it does for the operator, and
+  records the version that introduced or changed it where the record
+  holds one. Retired features stay listed as the record of the original
+  work.
 
-  - TX Soft Start (S-Curve): Cosine-interpolated PA power ramp over 60ms
-    eliminating key-up click. Uses precomputed S-curve lookup table instead
-    of linear ramp for smoother power transition.
+  - TX Audio Compressor: Real-time dynamic microphone compression that
+    catches a sudden shout at once and eases back smoothly, so your voice
+    reaches the other end at an even level. No other UV-K5 firmware has
+    dynamic TX audio processing.
 
-  - CTCSS Lead-In: 150ms pre-TX mic mute allowing CTCSS tone to reach full
-    amplitude before voice audio begins. Prevents repeater rejection of
-    first syllable. No other UV-K5 firmware does this.
+  - TX Soft Start (S-Curve): A smooth, shaped transmitter power ramp on
+    key-up that removes the key-up click.
 
-  - Intelligence-Based Squelch: Composite voice probability scoring (0-100)
-    using all 3 BK4819 hardware registers (RSSI REG_67, Noise REG_65,
-    Glitch REG_63) with cross-correlation weighting. Stock firmware treats
-    these as independent fixed thresholds. This combines them into a unified
-    voice probability score. Extended (v1.3.1) with a parked voice pre-bias:
-    the scorer also runs at 50ms cadence while the radio is parked and,
-    when the voice score is high and the channel noise floor has been
-    learned, biases the REG_78 open threshold down by at most 2 steps, with
-    falling-edge baseline restore in every exit path and hard gates against
-    every scan mode.
+  - CTCSS Lead-In: A brief microphone mute at the start of each
+    transmission so the sub-audible tone reaches full level before your
+    voice begins, preventing a repeater from clipping your first syllable.
+    No other UV-K5 firmware does this.
 
-  - Squelch Tail Elimination (Universal): Monitors CTCSS presence directly
-    via REG_0C bit 1 instead of relying on reverse burst detection. 4-state
-    machine (IDLE/MONITORING/TONE_LOST/MUTED) with 20ms confirmation window
-    and 150ms mute timeout. Works with all radio brands (Motorola 120
-    degree, Kenwood 180 degree, Chinese) regardless of STE method.
-    Extended (v1.3.1) to arm for DCS codes as well, reading the stock
-    interrupt-maintained g_CDCSS_Lost flag with a 250ms DCS mute window
-    matched to the ~180ms DCS turn-off code; hardened (v1.3.3) with
-    corrected detect polarity and a presence-proof latch so a co-channel
-    signal on a non-matching tone can never walk the state machine to the
-    mute path.
+  - Intelligence-Based Squelch: Combines signal strength, noise and
+    interference readings into one voice score instead of three fixed
+    thresholds. Extended in v1.3.1: a parked radio opens slightly earlier
+    for a likely voice once it has learned the channel's noise floor.
 
-  - FM Gain Staging: Closed-loop adaptive front-end gain control for FM
-    mode. AM_fix only handles AM. No other UV-K5 firmware has adaptive gain
-    control for FM. Includes frequency-change detection, idle ramp-up to
-    find signals, and pull-down on strong signals.
+  - Squelch Tail Elimination (Universal): Mutes the squelch tail on CTCSS
+    and DCS channels with one switch (Menu > TONE > STE), on any brand of
+    repeater regardless of its own tail-elimination method. Extended to
+    DCS in v1.3.1, hardened in v1.3.3 against a co-channel signal on a
+    non-matching tone, and in v1.5.1 the CTCSS tail mute follows the
+    receiver's own tone detector.
 
-  - S-Meter Compensation (GAIN_STAGING_GetGainDiff()): FM signal strength
-    correction that accounts for gain staging adjustments. AM had
-    compensation via AM_fix; this is the original FM equivalent.
+  - FM Gain Staging: Adaptive front-end gain control for FM that adapts
+    the receiver to signal strength, ramping up to find weak signals and
+    pulling back on strong ones. No other UV-K5 firmware has adaptive gain
+    control for FM. Since v1.5.1 dual watch, USB and VFO Split no longer
+    upset it.
 
-  - Unified Calibrated Signal Readout (RX_Signal_dBm): Single shared
-    computation (v1.3.4) feeding both the bottom-row RX readout
-    ("RX S.. ..dBm Q.. F") and the centre RSSI bar, including the per-band
-    calibration correction, so every on-screen signal indication reports
-    the same dBm / S-unit value.
+  - S-Meter Compensation: Keeps the S-meter true to the real signal
+    strength whatever the receiver gain is doing; the FM counterpart of
+    the AM Fix correction.
 
-  - VOX Voice-Seeking Spectrum (evolution v1.2.0 through v1.5.0): A
-    voice-seeking spectrum analyzer mode built on VUURWERK's voice
-    probability scoring. Original constituent works:
-      * Per-bin voice-probability scoring: ComputeVoiceProb() integer-only
-        scorer over RSSI and the BK4819 noise indicator (REG_65 captured
-        per bin during the sweep), with cross-correlation bonus and
-        early-reject tiers. No other UV-K5 firmware scores spectrum bins
-        for voice activity.
+  - Unified Calibrated Signal Readout: One shared, per-band calibrated
+    figure (v1.3.4) feeds both the RX line ("RX S7 -83dBm Q3", its
+    trailing class letter retired in v1.5.1) and the centre signal bar, so
+    every on-screen signal indication agrees.
+
+  - VOX Voice-Seeking Spectrum (evolution v1.2.0 through v1.5.1): A
+    spectrum analyzer mode built on VUURWERK's voice scoring that shows
+    and hunts voices rather than raw signals. Original constituent works:
+      * Per-bin voice scoring: every bin is scored for voice at the end of
+        each sweep; only voice bins draw a bar (half height for a weaker
+        score). No other UV-K5 firmware scores spectrum bins for voice.
       * Directional voice seek (v1.3.5): UP walks to the next voice bin
-        (voiceProb >= 50, real reading, not blacklisted) strictly above
-        the cursor, DOWN below, no wrap; with no voice that way the key
-        falls through to true band navigation, so a quiet band simply
-        tunes and a held key patrols the band, auto-stopping on voice.
-      * Voice gate auto-listen and hold (v1.3.3): when the loudest bin is
-        not voice, the auto-listen seeks and locks the strongest actual
-        voice bin in the span; the noise gate (REG_65 < 70) is the hold
-        authority independent of the RSSI trigger, with 2-strike
-        hysteresis so natural speech gaps ride through.
-      * PTT voice lock + open-squelch camp (v1.3.6): PTT while hearing a
-        voice locks onto that frequency ("LOCKED" banner), camping as an
-        open-squelch monitor that never resumes the hunt on its own; UP
-        or DOWN releases and resumes the directional seek.
-      * VFO frequency carry-over (v1.3.6, re-engineered v1.4.2): exiting
-        the spectrum while locked writes the parked frequency directly
-        into the active VFO's RAM and EEPROM (no reconfigure tail),
-        gated to frequency (VFO) mode and the VFO's current band, with
-        step rounding and a FrequencyReverse skip (v1.4.5); provably a
-        no-op in memory-channel mode.
-      * Deterministic spectrum exit (v1.4.3-v1.5.0): every spectrum exit
-        re-syncs RX to the operator's TX VFO, clears the stale receive
-        flag, reloads the dual-watch dwell before clearing the flag
-        (ISR-safe ordering), retunes gRxVfo after RADIO_SelectVfos,
-        marks the REG_30 cache dirty so the restored register value is
-        re-pulsed, and drains the keyboard until key release so a held
-        EXIT can never re-latch as a fresh main-screen VFO toggle.
+        above the cursor, DOWN below, no wrap; with no voice that way the
+        key moves the span instead, so a held key patrols the band and
+        stops on voice.
+      * Voice gate auto-listen and hold (v1.3.3): when the strongest bin
+        is not a voice, the auto-listen picks the strongest real voice bin
+        instead; it rides through natural speech gaps and lets go about
+        0.6 s after the voice ends.
+      * PTT voice lock and open-squelch camp (v1.3.6): PTT while hearing a
+        voice locks onto that frequency ("LOCKED"), camping as an
+        open-squelch monitor that never resumes the hunt by itself; UP or
+        DOWN releases it.
+      * VFO frequency carry-over (v1.3.6, re-engineered v1.4.2): leaving
+        the spectrum while locked writes the locked frequency into the
+        active VFO, in frequency mode on the VFO's own band only, rounded
+        to the VFO's step and skipped when reverse is on (v1.4.5); memory
+        channels are never written. Since v1.5.1 the modulation heard is
+        carried too.
+      * Deterministic spectrum exit (v1.4.3, rebuilt v1.5.1): every exit
+        returns the radio to your own VFO, hearing normally, with Monitor
+        restored if it was on; a PTT or EXIT still held at exit is
+        ignored, and entry is refused while the keypad is locked.
+      * Unattended PATROL (v1.5.1): a hands-free form of the VOX voice
+        hunt. In VOX, 2 sets the range start ("SET LO") and 8 the stop
+        ("SET HI") from the window on screen; the range, step and
+        modulation are saved on the radio. 0 starts and stops PATROL and
+        the corner label reads PTRL while it runs. The range is walked
+        window by window, lap after lap, with the last window aligned so
+        the whole range is covered. Unattended safeguards: no automatic
+        stop lasts longer than 60 seconds, after which that frequency is
+        skipped for about 2 minutes of sweeping; MENU while stopped on a
+        signal skips that frequency until PATROL stops; a PTT lock is
+        never cut off; PATROL stops and leaves the spectrum when the
+        battery reaches 5 percent so the radio's own low-battery warning
+        can show; and the BackLt timeout applies while it runs. Four menu
+        settings (PSens, PSpeed, PDwell, PResum in Menu > SCAN) tune the
+        run, and all four on NORM reproduce the hand-held hunt.
 
-  - Scan+Watch: Simultaneous scanning and dual-watch operation on both
-    VFOs. Original operational concept not present in any upstream
-    firmware. Persistent arming (v1.3.0): the setting arms on every scan
-    start and survives scan stop. Watch-VFO find isolation (v1.2.5)
-    protects the scan loop's restore state from cross-VFO writes.
+  - Scan+Watch: Scanning one VFO while watching the other for activity.
+    Original operational concept not present in any upstream firmware.
+    The setting stays armed across scan stops (v1.3.0); a find on the
+    watched VFO never disturbs the scan (v1.2.5).
 
-  - Adaptive Energy-Gated Scan Dwell (v1.3.3): Each stepped scan channel
-    gets a short ~30ms RSSI pre-check; only channels reading at or above
-    the band's first-bar calibration point are held for the full dwell,
-    so empty channels advance immediately (roughly 2-3x faster scanning
-    on empty bands). Any channel showing energy receives the identical
-    full evaluation, so weak-signal sensitivity is unchanged by design.
-    Scan-rate and Scan+Watch step counters are gated on a real advance.
+  - Adaptive Energy-Gated Scan Dwell (v1.3.3): Scanning skips empty
+    channels almost instantly and lingers only where there is signal,
+    roughly two to three times faster on an empty band with no loss of
+    weak-signal sensitivity.
 
   - Coded-Channel Scan Dwell (v1.3.3): Tone-coded (CTCSS/DCS) memory
-    channels receive a 500ms scan dwell (scan_pause_delay_coded_10ms) so
-    the decoder can confirm the tone before the scanner steps on,
-    eliminating the effective skipping of coded channels. Developed from
-    a field report by Scott Savage (KC7WDG).
+    channels get a longer scan look so the decoder can confirm the tone
+    before the scanner steps on, so coded channels are no longer skipped.
+    Developed from a field report by Scott Savage (KC7WDG).
 
-  - F+EXIT Reset-to-Simplex Rescue (v1.4.4, armed v1.4.5): One-gesture
-    recovery that wipes the current VFO (frequency mode only) back to a
-    clean simplex state: RX/TX CTCSS-DCS cleared, repeater offset and
-    direction cleared (TX = RX, true simplex), frequency reverse off,
-    scrambler off, modulation reset to FM. Persists via the blessed
-    keypad-commit path; memory channels are never touched ("FREQ ONLY"
-    toast). The one-gesture cure for a polluted VFO.
+  - F+EXIT Reset-to-Simplex Rescue (v1.4.4, armed v1.4.5): One gesture
+    that returns the current VFO to clean simplex: tones off, offset off,
+    reverse off, scrambler off, FM. It is saved like a keyed-in frequency;
+    memory channels are never touched ("FREQ ONLY" toast). The one-gesture
+    cure for a polluted VFO.
 
-  - Small-Font Renderer Clamp (v1.3.3): Bounds enforcement in the shared
-    small-font renderer (ui/helper.c) clamping every draw to the
-    framebuffer extent and rejecting out-of-range rows, closing a silent
-    framebuffer overrun that could corrupt the settings and channel
-    globals linked after gFrameBuffer.
+  - Small-Font Renderer Clamp (v1.3.3): A display-drawing safety fix that
+    prevents a corrupted screen from corrupting settings.
 
-  - Menu Hint Line (v1.3.1): Forty plain-language menu descriptions
-    rendered in a 3x5 mini font on the menu's bottom line while an item
-    is highlighted, without renaming or reordering any stock menu item.
+  - Menu Hint Line (v1.3.1): Plain-language descriptions on the menu's
+    bottom line while an item is highlighted, without renaming or
+    reordering any stock menu item. Since v1.5.1 the four PATROL settings
+    share one "PATROL ONLY" hint.
 
-  - VFO Split: Independent TX/RX frequency operation with 5-state hop
-    machine monitoring VFO B for activity while listening on VFO A.
-    Extended (v1.3.1) with an "SP" armed indicator in the status bar and
-    a real activity alert ("ACT <frequency>" toast plus a single 880 Hz
-    cue) when a walked channel shows activity.
+  - VFO Split: Independent TX/RX frequency operation that checks VFO B for
+    activity while you listen on VFO A. Extended (v1.3.1) with an "SP"
+    status-bar indicator and an "ACT <frequency>" alert toast plus a
+    single beep when a walked channel comes alive. Since v1.5.1 the alert
+    fires once each time a channel goes from quiet to active, and the
+    check stands aside for scans and Monitor.
 
-  - Bandscope on Main Screen: Background RF activity visualization running
-    during normal radio operation. Inspired by the Icom IC-7300's signature
-    feature, implemented on a 128x64 monochrome LCD with 8 pixels of height
-    on a $30 radio. Sweeps one step per main loop cycle without interrupting
-    audio.
+  - Bandscope on Main Screen: Background RF activity display on the main
+    screen's centre row during normal operation, inspired by the Icom
+    IC-7300's signature feature and drawn in 8 pixels of height on a $30
+    radio, without interrupting audio.
 
-  - Intelligent Dual-Watch: Activity-weighted dwell time computation for
-    dual-watch. Monitors VFO activity and computes proportional dwell times
-    so busier VFOs get checked less frequently. Activity is weighted by RX
-    duration (v1.2.7) so a 30-second QSO outweighs a 1-second carrier blip;
-    base dwell tuned to a stock-class 150ms (v1.3.1) for ~4x faster
-    detection of a call on the other VFO.
+  - Intelligent Dual-Watch: Activity-weighted dwell for dual watch, so a
+    busy VFO is checked less often and a long conversation outweighs a
+    one-second carrier blip (v1.2.7); faster detection of a call on the
+    other VFO since v1.3.1.
 
-  - Activity Log: 20-entry ring buffer recording RF activity when squelch
-    opens: frequency, signal strength (RSSI), CTCSS tone, and duration.
-    Also tracks radio uptime via ACTIVITY_LOG_UpdateUptime().
+  - Activity Log: A 20-entry record of RF activity (frequency, strength,
+    tone, duration) when the squelch opens, plus radio uptime. Retired in
+    v1.2.5 and no longer in the firmware; listed as the record of the
+    original work.
 
-  - Signal Classifier: Rise-time based signal categorization as Fast
-    (FM/digital), Normal (SSB), Slow (carrier), or Noise (~). Feeds into
-    gain staging hold timer for adaptive response. Symbol displayed on
-    status line during RX.
+  - Signal Classifier: Rise-time based categorisation of a received signal
+    with a symbol on the RX line. Retired in v1.5.1; the RX line symbol
+    was removed.
 
-  - Calling Frequency Jump: One-button (F+9) auto-tuning to the correct
-    simplex calling frequency for the current band, with automatic step size
-    and modulation mode configuration. Press again to restore previous
-    frequency. Supports 2m FM/SSB, 70cm FM/SSB, MURS, FRS/GMRS, CB,
-    Marine, Airband.
+  - Calling Frequency Jump: F+9 tunes the current band's simplex calling
+    frequency with the right step and modulation (2 m FM/SSB, 70 cm
+    FM/SSB, MURS, FRS/GMRS, CB, Marine, Airband), toast "CALL FREQ". The
+    press-again restore was retired in v1.5.1; since v1.5.1 the jump is
+    saved like a keyed-in frequency and refuses memory channels with
+    "FREQ ONLY".
 
-  - Categorized Menu System: 7-category menu architecture replacing the
-    stock 50+ item flat scrolling list. Number keys jump directly to any
-    category. Categories: Receive, Tone, TX, Scan, Channel, Config (plus
-    hidden Unlock category when gF_LOCK is true).
+  - Categorized Menu System: A 7-category menu (RECEIVE, TONE, TX, SCAN,
+    CHANNEL, CONFIG, plus an UNLOCK category that appears only when the
+    radio is unlocked) replacing the stock flat list of 50+ items; number
+    keys jump straight to a category.
 
-  - Context-Aware Status Line: Dynamic bottom-of-screen display that
-    automatically changes content based on radio state. Shows different
-    information for idle, receiving, transmitting, and scanning states.
+  - Context-Aware Status Line: The bottom line of the main screen changes
+    with what the radio is doing: idle, receiving, transmitting or
+    scanning.
 
-  - Toast Notification System: 1-second overlay popup feedback for shortcut
-    actions. Displays centered inverted text bar on line 3 of the LCD.
-    Decrements via 10ms tick timer.
+  - Toast Notification System: A one-second centred popup on the main
+    screen confirming every shortcut action.
 
-  - RSSI EWMA Filter: Exponential weighted moving average smoothing for
-    signal strength readings, eliminating S-meter jitter while preserving
-    fast response to real signal changes.
+  - RSSI EWMA Filter: Smoothing of signal strength readings against
+    S-meter jitter. Retired in v1.5.1.
 
-  - RSSI Histogram with Noise Floor Analysis: 32-bin statistical signal
-    environment profiling with automatic noise floor detection and optimal
-    squelch level calculation.
+  - RSSI Histogram with Noise Floor Analysis: Learns the real idle noise
+    floor on your frequency so the smart squelch knows where signals
+    begin. Since v1.5.1 it listens only to the parked, idle receiver and
+    lets old readings fade out.
 
-  - Signal Quality Metrics: 8-sample RSSI variance analysis rating signal
-    stability as Excellent, Good, Fair, or Poor for propagation quality
-    assessment.
+  - Signal Quality Metrics: Rates signal stability as the Q figure on the
+    RX line and the bars beside it in the status bar. Since v1.5.1 it is
+    computed from the raw reading.
 
-  - Side-Button Toast Feedback and Toast Subsystem Extraction: The
-    Toast Notification System originally introduced for F+key feedback
-    is now driven by a dedicated toast.c/h module and reused for
-    SIDE1, SIDE2, and long-press MENU presses so every shortcut path
-    produces the same 1-second on-screen confirmation. Original
-    implementation of UX-parity toast feedback for side-button paths
-    on the UV-K5 platform; no upstream fork emits any user-visible
-    feedback for side-button shortcut actions.
+  - Side-Button Toast Feedback: SIDE1, SIDE2 and long-press MENU actions
+    show the same one-second confirmation as the F-key shortcuts. No
+    upstream fork gives any on-screen feedback for side-button actions.
 
-  - Scan Rate Telemetry: Live channels-per-second readout appended to
-    the SCANNING status line, driven by a 100-tick rolling counter in
-    scan_rate.c that observes CHFRSCANNER_ContinueScanning events.
-    Standard rolling-counter telemetry technique, original
-    implementation for the UV-K5 platform; no upstream fork surfaces
+  - Scan Rate Telemetry: A live channels-per-second readout on the
+    SCANNING status line ("SCANNING 12c/s"). No upstream fork shows
     scanner throughput to the operator.
 
-  - F-Key UX Hardening: A bundle of three small reliability fixes
-    around the F-key dispatch path. KEY_F long-press emits a
-    "LOCKED"/"UNLOCKED" toast on the keypad-lock gesture, achieving
-    parity with the side-button keylock toast. F+3 (VFO/MR toggle)
-    surfaces "NO CHANNELS" when COMMON_SwitchVFOMode silently no-ops
-    on empty channel memory, replacing the misleading stock "VFO MODE"
-    toast. F+STAR (CSS scanner) is gated to FM mode only and toasts
-    "FM ONLY" in AM/USB to prevent the unbounded scan that would
-    otherwise occur because the BK4819 CTCSS detector populates only
-    in FM. STAR long-hold (scan toggle) gains its own "SCAN ON"/
-    "SCAN OFF" toast. Each gap is original to VUURWERK.
+  - F-Key UX Hardening: A long press of F shows "LOCKED" or "UNLOCKED";
+    F+3 shows "NO CHANNELS" when no channel is stored instead of a
+    misleading "VFO MODE"; F+STAR refuses AM and USB with "FM ONLY"
+    because tone scanning only works in FM; a long press of STAR shows
+    "SCAN ON" or "SCAN OFF". Each gap is original to VUURWERK.
 
-  - Flashlight Auto-Off Watchdog with Battery-Aware Tier: 100 Hz
-    software watchdog in flashlight_watchdog.c that extinguishes the
-    flashlight after 30 minutes of unattended ON or BLINK runtime
-    (10 minutes when gBatteryDisplayLevel <= 2). Mode changes reset
-    the timer so tapping the flashlight key extends the session. The
-    watchdog technique itself is standard; the original VUURWERK
-    contribution is the integration on the UV-K5 platform, the SOS
-    preservation rule, and the battery-aware tiered timeout (30 min
-    normal, 10 min when display level <= 2), which no other UV-K5
-    fork ships.
+  - Flashlight Auto-Off Watchdog with Battery-Aware Tier: The flashlight
+    turns itself off after 30 minutes, or 10 minutes when the battery
+    shows two bars or fewer; changing the flashlight mode restarts the
+    timer, and SOS is never cut off. The battery-aware tier and the SOS
+    rule are original to VUURWERK; no other UV-K5 fork ships them.
 
-  - CSS Scan Soft-Timeout Watchdog: Single conditional hook in
-    app/app.c that observes the CSS scanner's gScanProgressIndicator
-    after SCANNER_TimeSlice500ms and forces a transition to
-    SCAN_CSS_STATE_FAILED with an audible double-beep (timeout
-    tightened to 30 seconds in v1.2.7, paired with a pre-flight RSSI
-    gate and faster dwell), closing the unbounded-scan trap that even
-    the F+STAR FM-mode gate cannot fully prevent. Original to
-    VUURWERK; egzumer's ENABLE_NO_CODE_SCAN_TIMEOUT flag is binary
-    (16 seconds or infinite), and no other UV-K5 fork ships a soft
-    watchdog with operator cue.
+  - CSS Scan Soft-Timeout Watchdog: A tone scan that finds nothing stops
+    after 30 seconds with a double beep and "SCAN FAIL." instead of
+    running for ever (limit tightened to 30 seconds in v1.2.7, paired with
+    a "NO SIGNAL" refusal on dead air and a faster lock). Original to
+    VUURWERK; no other UV-K5 fork ships a scan watchdog with an operator
+    cue.
 
-  - Audio Palette Voice-Seek Cues: Audible feedback in audio_palette.c
-    for the voice-seeking spectrum mode: a short ascending 800/1200 Hz
-    chord confirms when a seek or hop lands on a bin with
-    voiceProb >= 50. (The earlier no-voice cue was deliberately retired
-    in v1.3.5 -- motion is the feedback; sound now means only "voice
-    acquired".) Two-tone confirmation chords are a standard audio-UX
-    idiom; the original VUURWERK contribution is the sound design and
-    the integration of audio feedback gated on VUURWERK-original voice
-    scoring. No other UV-K5 fork has voice-probability-gated audio cues
-    because no other UV-K5 fork has voice probability scoring.
+  - Audio Palette Voice-Seek Cues: A short ascending chord confirms when a
+    seek in the VOX spectrum lands on a voice. Sound means only "voice
+    acquired"; the earlier no-voice cue was retired in v1.3.5. Original
+    sound design gated on VUURWERK's voice scoring; no other UV-K5 fork
+    has voice-gated audio cues because none has voice scoring.
 
-  - Boot-Time Hardware Health Probe: Two-part self-test in
-    boot_health.c that runs once after BK4819_Init and before the
-    welcome screen renders. The first pass reads BK4819 register
-    0x00 and latches a fault bit if the value reads 0xFFFF, the
-    signature of a wedged SPI bus. The second pass reads the
-    factory-programmed battery-calibration page at EEPROM address
-    0x1F40 and latches a separate fault bit on the all-0xFF,
-    all-0x00, or two-pass-inconsistent signatures of a blanked or
-    unreachable calibration page. ui/welcome.c discriminates the
-    cause and renders either "BK4819 FAULT / RX/TX disabled" or
-    "EEPROM FAULT / calib lost" instead of the normal welcome banner.
-    Genuinely novel for the UV-K5 platform; no upstream fork
-    (DualTachyon, egzumer, kamilsss655, fagci) ships any boot-time
-    hardware diagnostic.
+  - Boot-Time Hardware Health Probe: At power-on the radio checks that the
+    transceiver answers and that the battery calibration is present, and
+    shows "BK4819 FAULT / RX/TX disabled" or "EEPROM FAULT / calib lost"
+    instead of the welcome banner if not. Since v1.5.1 the fault banner
+    shows even when the boot screen is set to NONE. Genuinely novel for
+    the UV-K5 platform; no upstream fork ships any boot-time hardware
+    diagnostic.
 
-  - Live Battery Voltage During TX: 500ms tick in battery_tx_monitor.c
-    that advances the existing gBatteryVoltages[] rolling ring via
-    BOARD_ADC_GetBatteryInfo and calls BATTERY_GetReadings(true) so
-    the on-screen battery icon and voltage/percent text update in
-    real time while transmitting. Closes the TX-time battery
-    staleness gap inherited from DualTachyon and present in every
-    UV-K5 fork (egzumer, kamilsss655, fagci) under the same
-    gCurrentFunction != FUNCTION_TRANSMIT guard. Original to
-    VUURWERK.
+  - Live Battery Voltage During TX: The battery icon and voltage or
+    percent text keep updating while you transmit, closing a staleness
+    gap inherited by every upstream UV-K5 fork. Original to VUURWERK.
 
-  - Backlight Fade-Out Tail and TX/RX Activity Refresh: Two
-    companion behaviours in backlight_fade.c. The fade-out tail
-    ramps the existing PWM brightness API down over 2 seconds at
-    the end of the idle window instead of cutting to black. The
-    TX/RX activity refresh re-arms the backlight countdown every
-    500ms during FUNCTION_TRANSMIT / FUNCTION_RECEIVE /
-    FUNCTION_INCOMING / FUNCTION_MONITOR when the operator's
-    per-mode bit is set, so the screen never goes dark mid-
-    conversation. Both behaviours implement standard backlight UX
-    patterns; the original VUURWERK contribution is the integration
-    via a dedicated companion module (backlight_fade.c) that leaves
-    the stock driver/backlight.c unmodified, and the per-radio-mode
-    arm-and-hold semantics (TX/RX/INCOMING/MONITOR refresh the
-    timer) that no other UV-K5 fork ships.
+  - Backlight Fade-Out Tail and TX/RX Activity Refresh: The backlight
+    fades over about 2 seconds instead of cutting to black, and stays lit
+    while you talk or listen when BltTRX says so. The per-mode
+    arm-and-hold behaviour is original to VUURWERK.
 
-  - TX Battery Sag Delta Tracker: Edge-detected per-transmission
-    voltage tracking in battery_sag.c. At PTT press the pre-TX
-    voltage is captured; during TX the running minimum is tracked;
-    at PTT release the sag delta is latched in 10mV units and
-    rendered as "TX sag NNNNmV" on the About screen, with a
-    "SAG 0.NNV" warning toast after unkey (v1.3.1) when the sag
-    reaches the documented tired-pack threshold of 0.20 V. Depends
-    on Live Battery Voltage During TX to update
-    gBatteryVoltageAverage during transmit. Per-TX battery
-    accounting is original to VUURWERK; no other UV-K5 fork
-    (DualTachyon, egzumer, kamilsss655, fagci) tracks per-PTT
-    battery health.
+  - TX Battery Sag Delta Tracker: Measures how far the battery voltage
+    dips during each transmission, shows it as "TX sag" on the About
+    screen, and (v1.3.1) warns with a "SAG 0.NNV" toast after unkey when
+    the dip reaches 0.20 V, the sign of a tired pack. Per-transmission
+    battery accounting is original to VUURWERK.
 
-  - CSS Scan Status-Bar Glyph and FOUND Beep: Two related CSS-scan
-    UX additions. A "Cs" glyph in ui/status.c distinguishes a CSS
-    scan from a channel scan and from SCANWATCH in the status bar.
-    A single 1 kHz beep emitted on the FOUND-edge of the CSS
-    scanner (after SCANNER_TimeSlice10ms) confirms when the
-    scanner has locked onto a tone, symmetric with the failure cue
-    from the soft-timeout watchdog above. A one-byte BSS latch
-    prevents repeated beeping while the FOUND state persists and
-    re-arms automatically on scanner exit. Both originals to
-    VUURWERK; no upstream fork distinguishes CSS scans visually
-    or emits a FOUND cue.
+  - CSS Scan Status-Bar Glyph and FOUND Beep: A "Cs" status-bar glyph
+    marks a running tone scan, and a single beep confirms when the scan
+    locks onto a tone; since v1.5.1 the menu tone scan and the F+STAR
+    scan both confirm a lock. No upstream fork distinguishes tone scans
+    visually or emits a found cue.
 
-  - Quiet Backlight PWM: Single VUURWERK marker block in main.c
-    that reprograms PWM_PLUS0_CLKSRC after BOARD_Init from
-    prescaler 46 (~1 kHz, stock egzumer / DualTachyon default) to
-    prescaler 7 (~6.7 kHz) so the backlight PWM carrier sits above
-    the 3 kHz audio passband. Eliminates the 1 kHz whine that bleeds
-    into outbound TX audio whenever the operator's screen is dimmed
-    during transmit. The technique was bench-validated and ported
-    by kamilsss655 (NUNU) in 2024 via stock-driver source
-    modification; VUURWERK's original contribution is the hook-based
-    main.c implementation, which keeps driver/backlight.c and
-    bsp/dp32g030/pwmplus.h byte-identical with the egzumer parent.
-    Acknowledged as a port of an existing technique with original
-    integration.
+  - Quiet Backlight PWM: The backlight dimmer runs above the audio band so
+    no whine reaches your transmitted audio when the screen is dimmed
+    while you transmit. Technique credited to kamilsss655 (NUNU), who
+    bench-validated it in 2024; VUURWERK's contribution is its integration
+    (v1.2.7, reworked v1.5.1). Acknowledged as a port of an existing
+    technique with original integration.
 
 END OF THE COMMERCIAL-LICENSING LIST. Every item above is commercial-license
 subject matter as stated at the top of this document and in the
@@ -378,11 +315,11 @@ additions are commercial-license subject matter from the release that
 introduces them.
 
 ===========================================================================
-Dual-Licensing Notice
+4. Dual-Licensing Notice
 ===========================================================================
 
-The VUURWERK-original source files listed above are
-dual-licensed:
+The VUURWERK-original features listed above (and the code
+that implements them) are dual-licensed:
 
   1. GNU General Public License v3. When distributed as
      part of the complete VUURWERK firmware. The upstream
@@ -417,10 +354,10 @@ the VUURWERK dual-license header AND to every
 VUURWERK-original contribution listed in this LICENSE
 document, including contributions implemented as
 marker-tagged sections inside otherwise-upstream files.
-Since v1.3.0, every VUURWERK edit to an egzumer-origin
-file is marker-tagged in source; those markers, together
-with the contributions list above, are the authoritative
-registry of VUURWERK-original work regardless of how it is
+Every VUURWERK edit to an egzumer-origin file is
+marker-tagged in source; those markers, together with the
+contributions list above, are the authoritative registry
+of VUURWERK-original work regardless of how it is
 integrated. The marker convention does not waive
 protection.
 
@@ -433,10 +370,10 @@ egzumer repository's Apache-2.0 license).
 For commercial licensing inquiries: jhoniball4@gmail.com
 
 ===========================================================================
-Third-Party Components
+5. Third-Party Components
 ===========================================================================
 
-  - chirp/uvk5_vuurwerk.py — CHIRP driver.
+  - chirp/uvk5_vuurwerk.py -- CHIRP driver.
     Copyright (c) 2023 Jacek Lipkowski SQ5BPF (original Quansheng
     UV-K5 CHIRP driver); based on template.py, Copyright 2012
     Dan Smith. Adapted for VUURWERK (2026) by mjwgeek
@@ -445,11 +382,11 @@ Third-Party Components
     file's own header. This driver is a host-side tool and is not
     part of the firmware binary.
 
-  - external/printf — Marco Paland's embedded printf.
+  - external/printf -- Marco Paland's embedded printf.
     Copyright (c) 2014 Marco Paland. MIT License (see
     external/printf/LICENSE).
 
-  - external/CMSIS_5 — ARM CMSIS headers.
+  - external/CMSIS_5 -- ARM CMSIS headers.
     Copyright (c) ARM Limited. Apache License 2.0 (see
     external/CMSIS_5/LICENSE.txt).
 
@@ -465,15 +402,17 @@ terms of the GPL v3. If you find this firmware useful, consider buying
 the developer a coffee:
 
   XRP Payment Address: rf82s1CDagppvM6ATqc1nSrL6GackzHJrm
-  IMPORTANT — Memo (required): 2621443948
+  IMPORTANT -- Memo (required): 2621443948
 
   Without the memo, the payment cannot be credited. Thank you!
 
-Dedicated to the memory of George Thomas Honiball — ZS6NE (Silent Key).
+Dedicated to the memory of George Thomas Honiball -- ZS6NE (Silent Key).
 See DEDICATION.md for the full memorial.
 
 73 de KC3TFZ
 
+===========================================================================
+6. GNU General Public License, version 3
 ===========================================================================
 
                     GNU GENERAL PUBLIC LICENSE

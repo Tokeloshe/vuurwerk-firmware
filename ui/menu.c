@@ -127,6 +127,12 @@ const t_menu_item MenuList[] =
 	{"Sql",    VOICE_ID_SQUELCH,                       MENU_SQL           },
 	{"ScnWch", VOICE_ID_INVALID,                       MENU_SCANWATCH     },
 	{"About",  VOICE_ID_INVALID,                       MENU_ABOUT         }, // VUURWERK About screen (CONFIG category)
+#ifdef ENABLE_SPECTRUM
+	{"PSens",  VOICE_ID_INVALID,                       MENU_PSENS         }, // VUURWERK PATROL: sensitivity
+	{"PSpeed", VOICE_ID_INVALID,                       MENU_PSPEED        }, // VUURWERK PATROL: sweep speed
+	{"PDwell", VOICE_ID_INVALID,                       MENU_PDWELL        }, // VUURWERK PATROL: hold after a hit
+	{"PResum", VOICE_ID_INVALID,                       MENU_PRESUME       }, // VUURWERK PATROL: resume delay
+#endif
 
 	// hidden menu items from here on
 	// enabled if pressing both the PTT and upper side button at power-on
@@ -338,6 +344,27 @@ const char gSubMenu_SCRAMBLER[][7] =
 	"3500Hz"
 };
 
+// VUURWERK v1.5.1 PATROL settings (patrol only -- hold-to-sweep is unaffected).
+const char gSubMenu_PSENS[][5] =
+{
+	"LOW",
+	"NORM",
+	"HIGH"
+};
+
+const char gSubMenu_PSPEED[][5] =
+{
+	"SLOW",
+	"NORM"
+};
+
+const char gSubMenu_PSHORTLONG[][6] =   // shared by PDWELL and PRESUME
+{
+	"SHORT",
+	"NORM",
+	"LONG"
+};
+
 const t_sidefunction gSubMenu_SIDEFUNCTIONS[] =
 {
 	{"NONE",			ACTION_OPT_NONE},
@@ -473,7 +500,7 @@ void UI_DisplayMenu(void)
 	}
 
 	// draw vertical separating dotted line
-	for (i = 0; i < 7; i++)
+	for (i = 0; i < 6; i++)   // VUURWERK: G064 row 6 is the full-width hint/status line
 		gFrameBuffer[i][(8 * menu_list_width) + 1] = 0xAA;
 
 	// draw the little sub-menu triangle marker
@@ -481,11 +508,6 @@ void UI_DisplayMenu(void)
 		memcpy(gFrameBuffer[0] + (8 * menu_list_width) + 1, BITMAP_CurrentIndicator, sizeof(BITMAP_CurrentIndicator));
 
 	// draw category name and position
-	// VUURWERK v1.3.1 (U3): while browsing (not in a submenu), items with a
-	// plain-language hint show it here in the 3x5 mini font instead of the
-	// category/position chrome ("RxMode" -> "DUAL WATCH / CROSSBAND RX").
-	// Items without a hint keep the original line. Display-only; names,
-	// ordering and values are untouched.
 	{
 		const char *hint = !gIsInSubMenu
 			? VUURWERK_MENU_GetHint(UI_MENU_GetCurrentMenuId()) : NULL;
@@ -517,6 +539,21 @@ void UI_DisplayMenu(void)
 		case MENU_SQL:
 			sprintf(String, "%d", gSubMenuSelection);
 			break;
+
+#ifdef ENABLE_SPECTRUM
+		case MENU_PSENS:
+			strcpy(String, gSubMenu_PSENS[gSubMenuSelection]);
+			break;
+
+		case MENU_PSPEED:
+			strcpy(String, gSubMenu_PSPEED[gSubMenuSelection]);
+			break;
+
+		case MENU_PDWELL:
+		case MENU_PRESUME:
+			strcpy(String, gSubMenu_PSHORTLONG[gSubMenuSelection]);
+			break;
+#endif
 
 		case MENU_MIC:
 			{	// display the mic gain in actual dB rather than just an index number
@@ -670,8 +707,9 @@ void UI_DisplayMenu(void)
 			if (valid && !gAskForConfirmation)
 			{	// show the frequency so that the user knows the channels frequency
 				const uint32_t frequency = SETTINGS_FetchChannelFrequency(gSubMenuSelection);
-				sprintf(String, "%u.%05u", frequency / 100000, frequency % 100000);
-				UI_PrintString(String, menu_item_x1, menu_item_x2, 4, 8);
+				// VUURWERK: G061 a blank record (11 chars) overruns the line; skip it
+				if (sprintf(String, "%u.%05u", frequency / 100000, frequency % 100000) <= 10)
+					UI_PrintString(String, menu_item_x1, menu_item_x2, 4, 8);
 			}
 
 			SETTINGS_FetchChannelName(String, gSubMenuSelection);
@@ -706,8 +744,9 @@ void UI_DisplayMenu(void)
 
 				if (!gAskForConfirmation)
 				{	// show the frequency so that the user knows the channels frequency
-					sprintf(String, "%u.%05u", frequency / 100000, frequency % 100000);
-					UI_PrintString(String, menu_item_x1, menu_item_x2, 4 + (gIsInSubMenu && edit_index >= 0), 8);
+					// VUURWERK: G061 a blank record (11 chars) wrote past gFrameBuffer
+					if (sprintf(String, "%u.%05u", frequency / 100000, frequency % 100000) <= 10)
+						UI_PrintString(String, menu_item_x1, menu_item_x2, 4 + (gIsInSubMenu && edit_index >= 0), 8);
 				}
 			}
 

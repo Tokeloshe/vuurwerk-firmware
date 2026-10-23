@@ -1,428 +1,514 @@
-# VUURWERK v1.5.0 Feature Access Map
-
-Complete guide to accessing every feature. Every mapping verified from source code.
-
-FEATURES.md is the canonical source of truth for the active feature inventory and the BK4819 register ownership table. If this document and FEATURES.md disagree, FEATURES.md wins.
-
----
-
-## Quick Reference
-
-```
-SHORTCUTS (press F then number key)
-F+0  Cycle modulation      FM > AM > USB          toast: MOD: FM/AM/USB
-F+1  Cycle band            50 > 144 > 430 > ...   toast: BAND
-F+2  Toggle VFO            A / B                   toast: VFO: A / VFO: B
-F+3  Toggle VFO/MR         Frequency / Memory      toast: VFO MODE / MR MODE
-F+4  Cycle squelch         0-9                     toast: SQL: N
-F+5  Spectrum analyzer     Launches spectrum app   (no toast)
-F+6  Cycle TX power        LOW > MID > HIGH        toast: PWR: LOW/MID/HIGH
-F+7  Toggle bandscope      On / Off                toast: SCOPE ON / SCOPE OFF
-F+8  Reverse offset        Normal / Reverse        toast: NORMAL / REVERSE
-F+9  Calling freq jump     Jump / Restore          toast: CALL FREQ / RESTORED
-F+*  CTCSS/DCS scanner     Scans for tones on current channel
-
-ON EVERY PTT
-  TX Soft Start        S-curve PA ramp, 60ms
-  CTCSS Lead-In        Mic mute 150ms, when tone is set
-  TX Compressor        Dynamic mic gain via REG_7D
-
-ALWAYS RUNNING (RX)
-  FM Gain Staging      Adaptive front-end gain control
-  RSSI Smoothing       Exponential moving average filter
-  Adaptive Squelch     Noise floor tracking + voice probability
-  Signal Classifier    Rise-time categorization (F/N/S/~)
-  S-Meter Compensation Corrects RSSI for gain changes
-  Squelch Tail Elim    CTCSS tone monitoring via REG_0C
-  RSSI Histogram       Statistical noise floor analysis
-
-ON SCREEN
-  Status bar       Battery, signal quality Q+bars, lock icon, F key
-  VFO lines        Frequency, channel name, TX power L/M/H, bandwidth N
-  Center line      Bandscope (when enabled via F+7)
-  Center line      Toast notifications (1 second overlay)
-  Bottom line      Context status: idle info / RX signal / TX timer / SCANNING
-  Bottom line      Signal classifier symbol (F/N/S/~) during RX
-
-MENU
-  Press MENU for category picker (6 visible + 1 hidden)
-  Keys 1-6 jump to category
-  About screen: Menu > CONFIG > About
-```
-
----
-
-## F+Key Shortcuts (from home screen)
-
-All shortcuts verified from `app/main.c:107-232`, function `VUURWERK_FKeyShortcut()`.
-
-### F+0: Cycle Modulation
-Cycles through FM, AM, USB modulation modes for the current VFO.
-Toast: "MOD: FM", "MOD: AM", or "MOD: USB"
-
-### F+1: Cycle Band
-Steps through frequency bands (50 MHz, 144 MHz, 430 MHz, etc.). Only works in VFO (frequency) mode.
-Toast: "BAND" (or "FREQ ONLY" if in memory mode)
-
-### F+2: Toggle VFO A/B
-Switches the active VFO between A and B.
-Toast: "VFO: A" or "VFO: B"
-
-### F+3: Toggle VFO/MR Mode
-Switches between VFO (direct frequency entry) and MR (memory channel) mode.
-Toast: "VFO MODE" or "MR MODE"
-
-### F+4: Cycle Squelch Level
-Steps squelch level from 0 through 9, wrapping back to 0.
-Toast: "SQL: 0" through "SQL: 9"
-
-### F+5: Spectrum Analyzer
-Launches the full-screen spectrum analyzer. Press Star key inside to cycle display modes: NORM, PEAK, VOX. Press EXIT to return to main screen.
-No toast (full screen transition).
-
-### F+6: Cycle TX Power
-Cycles transmit power: LOW, MID, HIGH.
-Toast: "PWR: LOW", "PWR: MID", or "PWR: HIGH"
-
-### F+7: Toggle Bandscope
-Turns the main-screen bandscope (mini spectrum display) on or off. When on, the center line shows a scrolling RF activity timeline.
-Toast: "SCOPE ON" or "SCOPE OFF"
-
-### F+8: Reverse Repeater Offset
-Toggles the repeater offset direction for the current VFO. Useful for listening on repeater input frequencies.
-Toast: "REVERSE" or "NORMAL"
-
-### F+9: Calling Frequency Jump
-First press: tunes to the standard simplex calling frequency for your current band, sets the correct step size and modulation. Second press: restores your previous frequency, step, and modulation.
-Toast: "CALL FREQ", "RESTORED", or "NO BAND" (if current frequency doesn't match any known band)
-
-Supported bands (from `app/main.c:87-97`, `band_call_table[]`):
-
-| Band | Range | Calling Frequency | Step | Modulation |
-|------|-------|-------------------|------|------------|
-| 2m SSB | 144.00-144.30 MHz | 144.200 MHz | 100 Hz | USB |
-| 2m FM | 144.00-148.00 MHz | 146.520 MHz | 500 Hz | FM |
-| 70cm SSB | 432.00-433.00 MHz | 432.100 MHz | 500 Hz | USB |
-| 70cm FM | 420.00-450.00 MHz | 446.000 MHz | 2.5 kHz | FM |
-| MURS | 151.00-154.00 MHz | 151.940 MHz | 1.125 kHz | FM |
-| FRS/GMRS | 462.00-467.00 MHz | 462.5625 MHz | 1.25 kHz | FM |
-| CB | 26.90-27.40 MHz | 27.185 MHz | 1 kHz | FM |
-| Marine | 156.00-162.00 MHz | 156.800 MHz | 2.5 kHz | FM |
-| Airband | 118.00-136.00 MHz | 121.500 MHz | 2.5 kHz | AM |
-
-Narrower SSB entries are checked before wider FM entries for overlapping bands (2m and 70cm).
-
-### F+STAR: CTCSS/DCS Code Scanner
-Scans for CTCSS/DCS codes on the current frequency. Found in `app/main.c` MAIN_Key_STAR function.
-
----
-
-## Menu Items
-
-Press MENU to open the category picker. Press a number key (1-6) to jump directly to a category, or scroll with UP/DOWN and press MENU to enter. The About screen is available at Menu > CONFIG > About.
-
-All category assignments verified from `ui/vuurwerk_menu.c:43-134`.
-Menu labels verified from `ui/menu.c:41-140`.
-
-### Category 1: RECEIVE
-
-| LCD Label | Menu ID | What It Controls | Values |
-|-----------|---------|------------------|--------|
-| Sql | MENU_SQL | Squelch level | 0-9 |
-| Step | MENU_STEP | Frequency step size | 2.5/5/6.25/10/12.5/25/8.33 kHz |
-| W/N | MENU_W_N | Channel bandwidth | Wide (25 kHz) / Narrow (12.5 kHz) |
-| Demodu | MENU_AM | Demodulation mode | FM / AM / USB |
-| Compnd | MENU_COMPAND | Compander | OFF / TX / RX / TX+RX |
-| AM Fix | MENU_AM_FIX | AM demod saturation fix | ON / OFF |
-| RxMode | MENU_TDR | Receive mode | Main only / Dual watch / Cross-band |
-
-### Category 2: TONE
-
-| LCD Label | Menu ID | What It Controls | Values |
-|-----------|---------|------------------|--------|
-| RxCTCS | MENU_R_CTCS | RX CTCSS tone | OFF / 67.0-254.1 Hz |
-| TxCTCS | MENU_T_CTCS | TX CTCSS tone | OFF / 67.0-254.1 Hz |
-| RxDCS | MENU_R_DCS | RX DCS code | OFF / D023N-D754I |
-| TxDCS | MENU_T_DCS | TX DCS code | OFF / D023N-D754I |
-| STE | MENU_STE | Squelch tail elimination | ON / OFF |
-| RP STE | MENU_RP_STE | Repeater STE | OFF / 1-10 |
-| Scramb | MENU_SCR | Scrambler | OFF / 1-10 |
-
-### Category 3: TX (Transmit)
-
-| LCD Label | Menu ID | What It Controls | Values |
-|-----------|---------|------------------|--------|
-| TxPwr | MENU_TXP | TX power level | LOW / MID / HIGH |
-| TxODir | MENU_SFT_D | TX offset direction | OFF / + / - |
-| TxOffs | MENU_OFFSET | TX offset frequency | 0-99.999 MHz |
-| TxTOut | MENU_TOT | TX timeout timer | OFF / 1-15 min |
-| Mic | MENU_MIC | Microphone gain | 0-4 |
-| BusyCL | MENU_BCL | Busy channel lockout | ON / OFF |
-| Roger | MENU_ROGER | Roger beep | OFF / Roger / MDC |
-| UPCode | MENU_UPCODE | DTMF up code | DTMF string |
-| DWCode | MENU_DWCODE | DTMF down code | DTMF string |
-| PTT ID | MENU_PTT_ID | PTT ID mode | OFF / UP / DOWN / UP+DOWN / Apollo |
-| D ST | MENU_D_ST | DTMF sidetone | ON / OFF |
-| D Prel | MENU_D_PRE | DTMF preload time | 10-200 ms |
-| D Live | MENU_D_LIVE_DEC | Live DTMF decoder | ON / OFF |
-
-### Category 4: SCAN
-
-| LCD Label | Menu ID | What It Controls | Values |
-|-----------|---------|------------------|--------|
-| SList | MENU_S_LIST | Scan list selection | List 1 / List 2 / All |
-| SList1 | MENU_SLIST1 | Scan list 1 channels | Channel selection |
-| SList2 | MENU_SLIST2 | Scan list 2 channels | Channel selection |
-| ScAdd1 | MENU_S_ADD1 | Add to scan list 1 | ON / OFF |
-| ScAdd2 | MENU_S_ADD2 | Add to scan list 2 | ON / OFF |
-| ScnRev | MENU_SC_REV | Scan resume mode | Time / Carrier / Search |
-| ScnWch | MENU_SCANWATCH | Scan+Watch / VFO Split | OFF / SCAN A WATCH B / SCAN B WATCH A / SPLIT |
-
-The **ScnWch** menu item controls both Scan+Watch and VFO Split:
-- **OFF**: Normal operation
-- **SCAN A WATCH B**: Scan on VFO A, periodically check VFO B
-- **SCAN B WATCH A**: Scan on VFO B, periodically check VFO A
-- **SPLIT**: VFO Split mode (hops VFO B through the memory channel list checking for activity while listening on VFO A; VFO B's display walks the channels as it checks them -- v1.3.0)
-
-v1.3.0: the SCAN A/B WATCH B/A setting is persistent -- it arms automatically on every scan start and survives scan stop (it was one-shot per scan before). Starting an MR scan whose selected scan list is empty now refuses cleanly with an EMPTY LIST toast instead of showing SCANNING while walking nothing.
-
-### Category 5: CHANNEL
-
-| LCD Label | Menu ID | What It Controls | Values |
-|-----------|---------|------------------|--------|
-| ChSave | MENU_MEM_CH | Save channel to memory | Channel number |
-| ChDele | MENU_DEL_CH | Delete memory channel | Channel number |
-| ChName | MENU_MEM_NAME | Channel name | 10 character string |
-| ChDisp | MENU_MDF | Channel display format | Frequency / Channel / Name |
-| 1 Call | MENU_1_CALL | 1-Call channel | Channel number |
-
-### Category 6: CONFIG
-
-| LCD Label | Menu ID | What It Controls | Values |
-|-----------|---------|------------------|--------|
-| BackLt | MENU_ABR | Backlight auto-off | OFF / 5s / 10s / 20s / 1m / 2m / 4m / ON |
-| BLMin | MENU_ABR_MIN | Backlight minimum brightness | 0-10 |
-| BLMax | MENU_ABR_MAX | Backlight maximum brightness | 1-10 |
-| BltTRX | MENU_ABR_ON_TX_RX | Backlight on TX/RX | OFF / TX / RX / TX+RX |
-| BatTxt | MENU_BAT_TXT | Battery display format | None / Voltage / Percent |
-| POnMsg | MENU_PONMSG | Power-on message | Full / Message / Voltage / None |
-| Beep | MENU_BEEP | Key beep | ON / OFF |
-| KeyLck | MENU_AUTOLK | Auto key lock | OFF / 15s / 30s / 60s / 2m / 5m |
-| F1Shrt | MENU_F1SHRT | F1 short press action | Action selection |
-| F1Long | MENU_F1LONG | F1 long press action | Action selection |
-| F2Shrt | MENU_F2SHRT | F2 short press action | Action selection |
-| F2Long | MENU_F2LONG | F2 long press action | Action selection |
-| M Long | MENU_MLONG | M long press action | Action selection |
-| BatVol | MENU_VOL | Battery voltage display | Read-only |
-| BatSav | MENU_SAVE | Battery save mode | OFF / 1:1 / 1:2 / 1:3 / 1:4 |
-
-### Category 7: UNLOCK (hidden)
-
-Only visible when `gF_LOCK` is true (enabled by holding PTT + upper side button at power-on).
-
-| LCD Label | Menu ID | What It Controls |
-|-----------|---------|------------------|
-| F Lock | MENU_F_LOCK | Frequency lock |
-| 200TX | MENU_200TX | 200 MHz TX enable |
-| 350TX | MENU_350TX | 350 MHz TX enable |
-| 500TX | MENU_500TX | 500 MHz TX enable |
-| 350EN | MENU_350EN | 350 MHz band enable |
-| ScnREN | MENU_SCREN | Scrambler enable |
-| BatCal | MENU_BATCAL | Battery calibration |
-| BatTyp | MENU_BATTYP | Battery type (1600/2200 mAh) |
-| Reset | MENU_RESET | Factory reset |
-
----
-
-## Automatic / Always Running (no user action needed)
-
-These features run in the background. All call sites verified from `app/app.c`.
-
-### During TX (every PTT press)
-
-| Feature | Call Site | What Happens |
-|---------|-----------|-------------|
-| **TX Soft Start** | app.c:1166 | Ramps PA power on S-curve over 60ms via REG_36 |
-| **CTCSS Lead-In** | app.c:1165 | Mutes mic 150ms via REG_50 when CTCSS tone is configured |
-| **TX Audio Compressor** | app.c:1167 | Reads mic level (REG_64), adjusts mic gain (REG_7D) every 10ms |
-
-Guard condition: `gCurrentFunction == FUNCTION_TRANSMIT`
-
-### During RX (when receiving a signal)
-
-| Feature | Call Site | What Happens |
-|---------|-----------|-------------|
-| **RSSI Smoothing Filter** | app.c:1324 | EWMA filter on raw RSSI, alpha=1/8 |
-| **Signal Quality Update** | app.c:1325 | Tracks RSSI variance over 8-sample window |
-| **RSSI Histogram Update** | app.c:1326 | Bins RSSI readings, finds noise floor every 256 samples |
-| **Signal Classifier Update** | app.c:1327 | Measures signal rise time, classifies as F/N/S/~ |
-| **Dual-Watch Mgmt Update** | app.c:1328 | Updates per-VFO RSSI averaging for dwell time calculation |
-
-Guard condition: `gCurrentFunction == FUNCTION_RECEIVE || FUNCTION_MONITOR`
-
-### Always Running (any radio state)
-
-| Feature | Call Site | What Happens |
-|---------|-----------|-------------|
-| **FM Gain Staging** | app.c:1180 | Adaptive gain control via REG_13 (FM mode only) |
-| **Bandscope Process** | app.c:1177 | Samples RSSI for scrolling spectrum display |
-| **VFO Split Process** | app.c:1183 | 5-state hop machine checking VFO B (when enabled) |
-| **Squelch Tail Process** | app.c:1309 | Monitors CTCSS tone loss via REG_0C (when STE enabled) |
-| **Smart Squelch Update** | app.c:1312 | 3-register voice probability scoring, adjusts REG_78 |
-| **Toast Tick** | app.c:1135 | Decrements toast countdown every 10ms; renders via ui/main.c |
-| **Flashlight Watchdog** | APP_TimeSlice10ms (after FlashlightTimeSlice) | Auto-extinguishes flashlight ON/BLINK after 30 min (10 min on low-battery pack); SOS preserved |
-| **Scan Rate Tick** | APP_TimeSlice10ms | Maintains rolling 100-tick channels-per-second counter for status-line display during scan |
-| **CSS Scan Soft-Timeout** | APP_TimeSlice500ms (after SCANNER_TimeSlice500ms) | 60-second wall-clock cap on CSS scan; flips to FAILED state and queues audible cue |
-| **CSS Scan FOUND Beep** | APP_TimeSlice10ms (after SCANNER_TimeSlice10ms) | Edge-triggered 1 kHz beep when scanner reaches FOUND state; one-byte BSS latch re-arms on EXIT |
-| **Battery TX Monitor** | APP_TimeSlice500ms | Advances battery-voltage ring during TX so on-screen indicator updates live |
-| **Battery Sag** | APP_TimeSlice500ms (after Battery TX Monitor) | Edge-detects TX entry/exit; latches per-TX voltage sag delta for About-screen display |
-| **Backlight Fade Tick** | APP_TimeSlice500ms (after Battery TX Monitor) | 2-second taper to TurnOff at end of idle window |
-| **Backlight Activity Refresh** | APP_TimeSlice500ms (before stock decrement) | Re-arms backlight countdown during TRANSMIT/RECEIVE/INCOMING/MONITOR if per-mode bit is set |
-| **Side Toast Hook** | APP_TimeSlice10ms (after ACTION_Handle) | Emits 1-second toast for SIDE1, SIDE2, long-press MENU when their actions execute |
-| **Boot Health Probe** | main.c (one-shot, after BK4819_Init) | Reads REG_00 to detect wedged BK4819; reads EEPROM 0x1F40 page to detect blanked calibration; latches fault bits for welcome-screen banner |
-| **Audio Palette Cue** | app/spectrum.c VOX hop branch | Plays ascending two-tone chord on voice-found hop; soft double-beep on sweep-without-voice |
-
----
-
-## Visible on Screen (user observes but doesn't trigger)
-
-All display rendering verified from `ui/main.c` and `ui/status.c`.
-
-### Status Bar (top row of LCD)
-
-| Element | Position | Source | What It Shows |
-|---------|----------|--------|---------------|
-| Signal Quality | Right-center | ui/status.c:152-169 | "Q" letter + 0-3 bars during RX |
-| Battery | Far right | ui/status.c:200-208 | Battery icon with 0-4 fill bars |
-| Lock Icon | Center | ui/status.c:140-149 | Lock icon when keys locked, "F" when F-key active |
-
-### VFO Display Lines
-
-| Element | Position | Source | What It Shows |
-|---------|----------|--------|---------------|
-| TX Power | Right of freq line | ui/main.c:670-675 | L, M, or H |
-| Bandwidth | Right of freq line | ui/main.c:688-689 | N (narrow) or blank (wide) |
-
-### Center Line (gFrameBuffer[3])
-
-This line is shared by multiple features with this priority:
-
-1. **Toast Notification** (highest priority, 1-second overlay)
-   - Source: ui/main.c:855-863
-   - Bordered box with centered text (e.g., "PWR: HIGH", "SQL: 5")
-   - Disappears after ~1 second (100 timer ticks at 10ms)
-
-2. **Bandscope** (when enabled via F+7)
-   - Source: ui/main.c:744-752, renders via BANDSCOPE_Render()
-   - 128-pixel wide scrolling RF activity timeline
-   - 8 pixels high, new samples scroll in from right
-   - Peak dots show strongest signal, noise floor as dotted line
-
-3. **RSSI Bar** (when ENABLE_RSSI_BAR is defined)
-   - Source: ui/main.c:170-256
-   - Text: "RSSI S-level" + graphical bar
-
-### Bottom Line (gFrameBuffer[6])
-
-| Radio State | What It Shows | Source |
-|-------------|---------------|--------|
-| Idle | Step size, bandwidth (N/W), modulation mode | ui/main.c:845-849 |
-| RX | "RX S[0-9] [dBm] Q:[0-3] [F/N/S/~]" | ui/main.c:835-838 |
-| TX | "TX M:SS PWR:L/M/H" (timer + power) | ui/main.c:822-826 |
-| Scanning | "SCANNING" | ui/main.c:840-842 |
-
-The **Signal Classifier Symbol** (F/N/S/~) appears at the end of the RX status line. F = fast/FM, N = normal/SSB, S = slow/carrier, ~ = noise.
-
----
-
-## Triggered by Radio State (automatic but conditional)
-
-| Feature | Trigger | Condition |
-|---------|---------|-----------|
-| **Activity Log recording** | Squelch opens | When transitioning from no-signal to signal during RX |
-| **Intelligent Dual-Watch** | VFO toggle timer | Only when dual-watch is enabled (RxMode menu) |
-| **Scan+Watch** | Scan active | Only when ScnWch is set to SCAN A/B WATCH B/A |
-| **VFO Split** | Background hop | Only when ScnWch is set to SPLIT |
-
----
-
-## Long-Press / Hidden Access
-
-| Action | How | Source |
-|--------|-----|--------|
-| **About Screen** | Menu > CONFIG > About | app/menu.c MENU_Key_MENU, ui/vuurwerk_about.c |
-| **Unlock Category** | Hold PTT + upper side button at power-on | Enables gF_LOCK, reveals 7th menu category |
-| **Key Lock** | Long-press F key | app/generic.c, GENERIC_Key_F() |
-
----
-
-## Spectrum Analyzer Modes
-
-Access: F+5 from main screen. Press Star key to cycle modes; a brief "MODE <name>" overlay confirms the change (v1.2.6).
-
-| Mode | Label | What It Shows |
-|------|-------|---------------|
-| 0 | NORM | Standard spectrum bars |
-| 1 | PEAK | Bars + peak hold dots (decay every 10 sweeps) |
-| 2 | VOX | Voice probability per bin, voice-hop navigation (UP/DOWN) |
-
-In VOX mode:
-- Bars draw on voice probability >= 50 (hop threshold); half-height for 50-74, full-height for >= 75; floor dot below 50 (v1.2.6 tier threshold raised from 35 to match the hop threshold)
-- 1-pixel marker tick at y=0 over every hop-eligible bin (v1.2.6)
-- UP/DOWN keys hop to next frequency bin with voice probability >= 50, skipping blacklisted bins (v1.2.6 blacklist check added)
-- Auto-listens and checks noise register for voice presence
-
-### Spectrum view side-button keymap (v1.2.7)
-
-| Gesture | Action | Implementation |
+# VUURWERK Access Map (v1.5.1)
+
+Every feature on one page: which key, which menu, which screen. The how and why live in [USER_MANUAL.md](USER_MANUAL.md); the feature tour is [FEATURES.md](FEATURES.md); the overview is [README.md](README.md).
+
+Key names used here: STAR is the * key, F is the # key. "F+5" means press F, let go, then press 5.
+
+## Contents
+
+- [Shortcuts](#shortcuts)
+- [Side keys](#side-keys)
+- [Menu](#menu)
+- [Screen](#screen)
+- [Automatic](#automatic)
+- [Spectrum](#spectrum)
+- [PATROL](#patrol)
+- [Hidden and power-on gestures](#hidden-and-power-on-gestures)
+
+## Shortcuts
+
+All of these work on the main screen. Inside the menu an F shortcut only double-beeps. A refusal is a double beep plus the toast in the last column.
+
+| Key | Does | Toast | Refused with |
+|---|---|---|---|
+| F+0 | Cycles modulation FM, AM, USB | `MOD: FM` `MOD: AM` `MOD: USB` | |
+| F+1 | Next frequency band | `BAND` | `FREQ ONLY` in memory mode |
+| F+2 | Switches VFO A and B | `VFO: A` `VFO: B` | |
+| F+3 | Switches VFO mode and memory mode | `VFO MODE` `MR MODE` | `NO CHANNELS` when nothing is stored |
+| F+4 | Squelch level up one, 9 wraps to 0 | `SQL: n` | |
+| F+5 | Opens the spectrum | none | lock prompt when the keypad is locked |
+| F+6 | Cycles TX power LOW, MID, HIGH | `PWR: LOW` `PWR: MID` `PWR: HIGH` | |
+| F+7 | Bandscope on the centre line on or off | `SCOPE ON` `SCOPE OFF` | |
+| F+8 | Reverse: swaps RX and TX frequencies | `REVERSE` `NORMAL` | |
+| F+9 | Jumps to the band's calling frequency | `CALL FREQ` | `FREQ ONLY` in memory mode, `NO BAND` outside the table |
+| F+STAR | Starts a CTCSS/DCS tone scan on this frequency | | `FM ONLY` in AM or USB |
+| F+EXIT | Resets the VFO to simplex: offset, tones, scrambler and reverse off, FM | `SIMPLEX` | `FREQ ONLY` in memory mode |
+| hold F | Keypad lock on or off | `LOCKED` `UNLOCKED` | |
+| hold STAR | Scan on or off | `SCAN ON` `SCAN OFF` | `EMPTY LIST` on a list with no channels |
+| hold a digit | The F shortcut for that digit, without pressing F | as above | as above |
+| hold MENU | The M Long action from the menu | depends on the action | |
+
+> **F+1 band slots.** The bands run 1 to 7 and wrap after 7. The 350 MHz band is skipped while 350 En is OFF. The band number shows as `F1` to `F7` beside the frequency.
+
+> **F+5 and the lock.** When the keypad is locked the spectrum refuses to open: the screen shows `Long press #` / `to unlock` for 2 seconds with a double beep. Hold F to unlock first.
+
+> **F+9 is a one-way jump.** It sets the frequency, step and modulation for the band you are on, drops tones and offset, and leaves you in simplex. To go back, key the old frequency.
+
+| Band you are on | Calling frequency | Mode |
 |---|---|---|
-| SIDE1 short / hold | Frequency UP one step (auto-repeats while held) | app/spectrum.c OnKeyDown KEY_SIDE1 calls UpdateCurrentFreq(true) |
-| SIDE2 short / hold | Frequency DOWN one step (auto-repeats while held, symmetric with SIDE1) | app/spectrum.c OnKeyDown KEY_SIDE2 calls UpdateCurrentFreq(false) |
-| MENU short | Blacklist current peak bin | app/spectrum.c OnKeyDown KEY_MENU calls Blacklist() |
+| 144.000 to 144.300 MHz | 144.200 | USB |
+| 144.000 to 148.000 MHz | 146.520 | FM |
+| 432.000 to 433.000 MHz | 432.100 | USB |
+| 420.000 to 450.000 MHz | 446.000 | FM |
+| 151.000 to 154.000 MHz | 151.940 | FM |
+| 462.000 to 467.000 MHz | 462.5625 | FM |
+| 26.900 to 27.410 MHz | 27.185 | FM |
+| 156.000 to 162.000 MHz | 156.800 | FM |
+| 118.000 to 136.000 MHz | 121.500 | AM |
 
-ToggleBacklight is no longer accessible from spectrum view (v1.2.7 removed the v1.2.6 SIDE2 long-press binding). Operators wanting to toggle backlight while in spectrum: EXIT, toggle from main screen, F+5 to re-enter.
+The narrow SSB segments are checked first, so 144.250 MHz jumps to 144.200 USB while 145.500 MHz jumps to 146.520 FM.
 
-UP / DOWN remain mode-aware: voice-hop in VOX, frequency step in NORM / PEAK (unchanged from v1.2.5).
+### Tone scan from the menu
 
-### CSS Scanner Robustness (v1.2.7)
+1. **Open Menu > TONE > RxCTCS** (or RxDCS) and press MENU to edit it.
+2. **Press STAR.** `SCAN` and a row of moving dots appear. FM only; a double beep means AM, USB or cross band.
+3. **Wait for the beep.** The found tone lands in RxCTCS or RxDCS.
+4. **Press MENU** to keep it, or EXIT to leave it unchanged.
 
-| Behaviour | Implementation |
+The tone scan from the main screen (F+STAR) shows its own screen: `FREQ:`, `CTC:******` until found, then `SCAN CMP.` on a hit, `SCAN FAIL.` after 30 seconds with nothing found, or `NO SIGNAL` (with a toast and a double beep) when there is no carrier to read. The radio measures signal strength, not audio, before it starts.
+
+## Side keys
+
+Set SIDE1, SIDE2 and the held MENU key in Menu > CONFIG (F1Shrt, F1Long, F2Shrt, F2Long, M Long). Defaults: SIDE1 short MONITOR, SIDE1 long FLASH LIGHT, SIDE2 short SCAN, SIDE2 long NONE, M Long NONE.
+
+| Action | What it does | Toast |
+|---|---|---|
+| NONE | Nothing | |
+| FLASH LIGHT | LED off, on, blink, SOS, off. Turns itself off after 30 minutes, 10 minutes when the battery is low; SOS never | none |
+| POWER | Cycles TX power LOW, MID, HIGH | `PWR: LOW` `PWR: MID` `PWR: HIGH` |
+| MONITOR | Opens the squelch; again closes it | `MON ON` `MON OFF` |
+| SCAN | Starts a scan; during a memory scan steps the list 1, 2, all; during a frequency scan stops it | `SCAN ON` `SCAN OFF` |
+| LOCK KEYPAD | Keypad lock on or off (not in the menu, not while transmitting) | `LOCKED` `UNLOCKED` |
+| SWITCH VFO | Switches VFO A and B | `VFO: A` `VFO: B` |
+| VFO/MR | Switches VFO mode and memory mode | `MR MODE` `VFO MODE` |
+| SWITCH DEMODUL | Cycles FM, AM, USB | `MOD: FM` `MOD: AM` `MOD: USB` |
+| SPECTRUM | Opens the spectrum (lock prompt when locked) | none |
+
+A short press acts when you let go. A long press acts once when the hold time is reached, and letting go then does nothing more.
+
+### Locked keypad
+
+| Situation | What happens |
 |---|---|
-| Pre-flight RSSI gate (NO SIGNAL toast + 500 Hz double-beep on dead air) | app/scanner.c SCANNER_Start singleFreq path reads BK4819_GetRSSI() after 50 ms AGC settle; aborts when RSSI < raw 100 (~-110 dBm) |
-| CTCSS lock on first confirmation (matches DCS behaviour) | app/scanner.c SCANNER_TimeSlice10ms merged CDCSS/CTCSS arms |
-| Dwell 120 ms (was 210 ms) | misc.c scan_delay_10ms = 12 |
-| Soft-timeout 30 s (was 60 s) | app/app.c CSS scan soft-timeout watchdog threshold reduced from 120 ticks to 60 ticks |
+| Still works | PTT, both side keys, a held MENU |
+| Refused | Every other key: double beep and `Long press #` / `to unlock` for 2 seconds |
+| Unlock | Hold F; the toast says `UNLOCKED` |
+| Auto-lock | Menu > CONFIG > KeyLck AUTO locks 15 seconds after the last key; the countdown pauses in the menu and during scans |
 
----
+## Menu
 
-## Unreachable Features
+Press MENU on the main screen for the category picker. Digits 1 to 6 jump straight to a category, 7 as well once UNLOCK is showing. In a category UP and DOWN move, MENU edits or accepts, EXIT backs out, and a digit jumps to that item number. The menu closes by itself after 20 seconds without a key (2 minutes on BatVol and BatCal).
 
-None. All 41 documented features have verified execution paths from `main()`. Every function listed as "active" in FEATURES.md has at least one reachable call site. The #27 slot is intentionally empty (Activity Log retired in v1.2.5).
+```
++----------------------------+
+|                    [BATT#] |
+| 1 RECEIVE                  |
+|>2 TONE<                    |
+| 3 TX                       |
+| 4 SCAN                     |
+| 5 CHANNEL                  |
+| 6 CONFIG                   |
+| 7 UNLOCK                   |
++----------------------------+
+```
 
----
+| Element | Meaning |
+|---|---|
+| `>2 TONE<` | The cursor row, drawn inverted on the radio |
+| `7 UNLOCK` | Only present after the power-on unlock gesture |
+| Bottom row in an item | A hint such as `PATROL ONLY`, or `SCAN 7/11` (item 7 of 11) |
 
-## BK4819 Register Ownership
+### RECEIVE
 
-Mirror of the canonical table in FEATURES.md "BK4819 Register Ownership". If this table drifts from FEATURES.md, FEATURES.md is authoritative.
+| Item | What it controls | Values |
+|---|---|---|
+| Step | Tuning step | 0.01kHz to 500.00kHz |
+| W/N | Channel bandwidth | WIDE, NARROW |
+| Compnd | Compander | OFF, TX, RX, TX/RX |
+| Demodu | Modulation | FM, AM, USB |
+| AM Fix | AM overload correction | OFF, ON |
+| RxMode | Dual watch and cross band | MAIN ONLY, DUAL RX RESPOND, CROSS BAND, MAIN TX DUAL RX |
+| Sql | Squelch level | 0 to 9 |
 
-| Register | Owner Module | Direction | Purpose |
-|----------|-------------|-----------|---------|
-| REG_00 | boot_health.c | Read | One-shot post-init liveness probe (BK4819_Init writes for soft reset; boot_health reads once to detect 0xFFFF wedged-SPI signature) |
-| REG_0C | squelch_tail.c | Read | CTCSS found flag (bit 1) |
-| REG_13 | gain_staging.c, am_fix.c | Write | RX gain control (FM only, AM_fix owns in AM mode) |
-| REG_36 | tx_soft_start.c | Write (via API) | PA power level |
-| REG_47 | squelch_tail.c | Write (via API) | Audio path AF mute/unmute |
-| REG_48 | stock radio.c | Write | AF RX gain + DAC |
-| REG_50 | ctcss_lead.c | Write (via API) | TX mic mute |
-| REG_63 | smart_squelch.c | Read | Glitch indicator (transients) |
-| REG_64 | tx_compressor.c | Read | Mic level amplitude |
-| REG_65 | smart_squelch.c, app/spectrum.c VOX | Read | Noise indicator (voice predictor) |
-| REG_67 | gain_staging.c, smart_squelch.c, bandscope.c, vfo_split.c | Read | RSSI |
-| REG_78 | smart_squelch.c | Write | RSSI squelch open/close threshold |
-| REG_7D | tx_compressor.c | Write | Mic gain (bits 4:0) |
+### TONE
 
-Each module touches only its designated registers. No register conflicts exist between modules.
+| Item | What it controls | Values |
+|---|---|---|
+| RxDCS | Receive DCS code | OFF, D023N to D754I |
+| RxCTCS | Receive CTCSS tone | OFF, 67.0Hz to 254.1Hz |
+| TxDCS | Transmit DCS code | OFF, D023N to D754I |
+| TxCTCS | Transmit CTCSS tone | OFF, 67.0Hz to 254.1Hz |
+| Scramb | Scrambler | OFF, 2600Hz to 3500Hz |
+| STE | Squelch tail elimination | OFF, ON |
+| RP STE | Repeater tail delay | OFF, 1*100ms to 10*100ms |
 
----
+### TX
 
-*VUURWERK v1.5.0 -- All mappings verified from source code, 2026-07-04*
+| Item | What it controls | Values |
+|---|---|---|
+| TxPwr | Transmit power | LOW, MID, HIGH |
+| TxODir | Repeater offset direction | OFF, +, - |
+| TxOffs | Repeater offset in MHz | typed, six digits |
+| BusyCL | No transmit on a busy channel | OFF, ON |
+| TxTOut | Transmit time-out | 30 sec, 1 min to 9 min, 15 min |
+| Mic | Microphone gain | five steps in dB |
+| Roger | End-of-transmission beep | OFF, ROGER, MDC |
+| PTT ID | Tone sent with PTT | OFF, UP CODE, DOWN CODE, UP+DOWN CODE, APOLLO QUINDAR |
+| D ST | Sidetone for the tone burst | OFF, ON |
+
+Only APOLLO QUINDAR sends a tone in this firmware. UPCode, DWCode, D Prel and D Live are not in the menu; CHIRP can still edit them.
+
+### SCAN
+
+| Item | What it controls | Values |
+|---|---|---|
+| ScAdd1 | This channel in scan list 1 | OFF, ON |
+| ScAdd2 | This channel in scan list 2 | OFF, ON |
+| SList | Which list a memory scan uses | LIST1, LIST2, ALL |
+| SList1 | Shows list 1 and its priority channels | read only |
+| SList2 | Shows list 2 and its priority channels | read only |
+| ScnRev | How a scan resumes | TIMEOUT, CARRIER, STOP |
+| ScnWch | Watch the other VFO while scanning | OFF, SCAN A WATCH B, SCAN B WATCH A, SPLIT |
+| PSens | PATROL sensitivity | LOW, NORM, HIGH |
+| PSpeed | PATROL sweep speed | SLOW, NORM |
+| PDwell | PATROL listen time after a hit | SHORT, NORM, LONG |
+| PResum | PATROL wait before moving on | SHORT, NORM, LONG |
+
+ScnWch is OFF at every power-on. SCAN A WATCH B and SCAN B WATCH A check the other VFO during a scan; a hop never disturbs what you tuned on VFO A. SPLIT arms `SP` in the status bar and alerts with `ACT 146.52000` style toasts when the other VFO hears activity. The four P items affect PATROL only; see [PATROL](#patrol).
+
+### CHANNEL
+
+| Item | What it controls | Values |
+|---|---|---|
+| ChSave | Saves the VFO to a channel | channel number, MENU twice (`SURE?`, `WAIT!`) |
+| ChDele | Deletes a channel | used channels only, MENU twice |
+| ChName | Names a channel | ten characters; UP/DOWN pick, STAR inserts -, F inserts a space |
+| ChDisp | What a channel shows | FREQ, CHANNEL NUMBER, NAME, NAME+FREQ |
+| 1 Call | One-call channel | channel number |
+
+### CONFIG
+
+| Item | What it controls | Values |
+|---|---|---|
+| F1Shrt | SIDE1 short press | NONE, FLASH LIGHT, POWER, MONITOR, SCAN, LOCK KEYPAD, SWITCH VFO, VFO/MR, SWITCH DEMODUL, SPECTRUM |
+| F1Long | SIDE1 long press | same list |
+| F2Shrt | SIDE2 short press | same list |
+| F2Long | SIDE2 long press | same list |
+| M Long | MENU held | same list |
+| KeyLck | Automatic keypad lock | OFF, AUTO |
+| BatSav | Battery save ratio | OFF, 1:1, 1:2, 1:3, 1:4 |
+| POnMsg | Boot screen | FULL, MESSAGE, VOLTAGE, NONE |
+| BatTxt | Battery text in the status bar | NONE, VOLTAGE, PERCENT |
+| BackLt | Backlight time | OFF, 5 sec, 10 sec, 20 sec, 1 min, 2 min, 4 min, ON |
+| BLMin | Backlight dim level | 0 to 9 |
+| BLMax | Backlight bright level | 1 to 10 |
+| BltTRX | Backlight on TX or RX | OFF, TX, RX, TX/RX |
+| Beep | Key beep | OFF, ON |
+| BatVol | Battery voltage and percent | read only |
+| About | Opens the About screen | MENU |
+
+### UNLOCK
+
+Hidden until you power on with PTT and SIDE1 held together; the radio then opens the picker with `7 UNLOCK` showing. It stays visible until you power off.
+
+| Item | What it controls | Values |
+|---|---|---|
+| F Lock | Transmit band limits | DEFAULT+ 137-174 400-470, FCC HAM 144-148 420-450, CE HAM 144-146 430-440, GB HAM 144-148 430-440, 137-174 400-430, 137-174 400-438, DISABLE ALL, UNLOCK ALL |
+| Tx 200 | Transmit on 200 MHz | OFF, ON |
+| Tx 350 | Transmit on 350 MHz | OFF, ON |
+| Tx 500 | Transmit on 500 MHz | OFF, ON |
+| 350 En | Show the 350 MHz band | OFF, ON |
+| ScraEn | Allow the scrambler | OFF, ON |
+| BatCal | Battery calibration | UP and DOWN only |
+| BatTyp | Battery pack | 1600mAh, 2200mAh |
+| Reset | Factory reset, then reboot | VFO, ALL; MENU twice |
+
+UNLOCK ALL must be confirmed ten times; between attempts the item reads `READ MANUAL`.
+
+## Screen
+
+The LCD has a status bar and seven rows below it. These four mock-ups are the main screen in its four states. The status bar icons are described in the table after them.
+
+Idle, VFO A main:
+
+```
++----------------------------+
+|                    [BATT#] |
+|  146.52000              F2 |
+|                            |
+|       H                    |
+|                            |
+|  446.00000                 |
+|                            |
+| 12.5kHz W FM               |
++----------------------------+
+```
+
+Receiving on VFO A:
+
+```
++----------------------------+
+|  RX              Q [BATT#] |
+|  RX 146.52000           F2 |
+|                            |
+|  CT   H                    |
+|  -105 S4  [####......]     |
+|  446.00000                 |
+|                            |
+| RX S4 -105dBm Q2           |
++----------------------------+
+```
+
+Transmitting on VFO A:
+
+```
++----------------------------+
+|  TX                [BATT#] |
+|  TX 146.52000           F2 |
+|                            |
+| ||||| CT   H               |
+|                            |
+|  446.00000                 |
+|                            |
+| TX 0:12 PWR:H              |
++----------------------------+
+```
+
+Scanning:
+
+```
++----------------------------+
+|  S                 [BATT#] |
+|  146.53750              F2 |
+|                            |
+|       H                    |
+|                            |
+|  446.00000                 |
+|                            |
+| SCANNING 12c/s             |
++----------------------------+
+```
+
+### Status bar
+
+| Position | Shows | When |
+|---|---|---|
+| Far left | TX, RX or power-save icon | transmitting, squelch open, sleeping |
+| Next | `S` frequency scan, `1` `2` `*` memory scan on list 1, 2 or all, `Cs` tone scan, `S+W` scan and watch | a scan runs |
+| Next | Dual watch or cross band icon | RxMode is not MAIN ONLY |
+| Next | `SP` | ScnWch SPLIT armed |
+| Middle | Key-lock icon, or the F icon | keypad locked, F armed |
+| Next | `Q` plus 0 to 3 bars | receiving (signal quality) |
+| Right | Battery voltage or percent | BatTxt VOLTAGE or PERCENT |
+| Far right | Battery icon, blinks when low | always |
+
+### VFO lines
+
+| Element | Shows |
+|---|---|
+| Marker at the left edge | The main VFO; a hollow marker on the other VFO while it is receiving |
+| `TX` or `RX` bold before the frequency | The VFO transmitting or receiving |
+| Big frequency | `146.52000`; while typing, `-` fills the digits still to come |
+| Channel display | per ChDisp: frequency, `CH-001`, the name, or name over frequency |
+| `F1` to `F7` or `M12` small at the left | Band number in VFO mode, channel number in memory mode |
+| Small row under the frequency | `CT` `DCS` `DCR` tone type (or `AM` `USB`), `L` `M` `H` power, `+` `-` offset, `R` reverse, `N` narrow, `SCR` scrambler |
+| Big word instead of the frequency | `BUSY`, `BAT LOW`, `TX DISABLE`, `TIMEOUT`, `VOLT HIGH` |
+| Bars at the left while transmitting | 2, 4 or 6 bars for LOW, MID, HIGH |
+
+### Centre line
+
+In order of priority: the signal bar while receiving (`-105 S4` and a bar, with a `+` and dB over S9 on strong signals), the bandscope when F+7 has turned it on, otherwise blank. A toast draws a white-bordered box over this line for about 1 second.
+
+### Bottom line
+
+| State | Text |
+|---|---|
+| Transmitting | `TX 0:12 PWR:H`, time counting up, power L, M or H |
+| Receiving | `RX S4 -105dBm Q2`, S unit, calibrated dBm, quality 0 to 3 |
+| Scanning | `SCANNING 12c/s`, channels per second |
+| Idle | `12.5kHz W FM`, step, W or N, modulation |
+
+Two full-screen messages replace all of this: `LOW BATTERY` / `Press EXIT` (EXIT closes it) and `Long press #` / `to unlock` (shown for 2 seconds after a key on a locked keypad).
+
+## Automatic
+
+Nothing to switch on. These run by themselves and this is how you notice them.
+
+| Feature | What you notice |
+|---|---|
+| Adaptive squelch | Opens on voice, stays shut on noise, at every Sql level from 1 to 9 |
+| Signal quality | `Q0` to `Q3` on the RX line and the `Q` bars in the status bar while receiving |
+| Calibrated signal readout | S unit and dBm on the RX line and the centre bar |
+| TX compressor | Your voice level stays even whether you whisper or shout |
+| Soft PA ramp | No click or thump at the start of a transmission |
+| Battery sag readout | `SAG 0.25V` toast after a transmission when the pack sagged noticeably; the About screen shows the last value |
+| Squelch tail | A clean close instead of a burst of noise when the other station unkeys |
+| Dual watch | The two VFOs alternate quickly and pause while you hold a key |
+| Battery save | The radio sleeps between checks after 10 seconds idle, per BatSav |
+| Flashlight time-out | Off after 30 minutes, 10 minutes on a low battery; SOS never times out |
+| Low battery | `LOW BATTERY` / `Press EXIT` once; the battery icon blinks |
+| Boot check | `BK4819 FAULT` / `RX/TX disabled` or `EEPROM FAULT` / `calib lost` at power-on warns of a dead radio chip or blank calibration |
+| Auto key lock | KeyLck AUTO locks the keypad 15 seconds after the last key |
+| Backlight fade | The light fades out over about 2 seconds instead of cutting off |
+| About screen | Closes by itself after about 10 seconds, or on a signal |
+
+## Spectrum
+
+Open it with F+5, or a side key or M Long set to SPECTRUM. It starts centred on the VFO frequency, 64 bins of 25 kHz, in NORM mode, with PATROL off. EXIT takes you back to your own VFO. Details: [USER_MANUAL.md](USER_MANUAL.md#7-spectrum-analyzer).
+
+```
++----------------------------+
+| -130/-50           [BATT#] |
+| 64x  146.52000     NORM FM |
+| 25.00k    #            25k |
+|      #    #     #          |
+|  #   #    #  #  #   #      |
+| ######_####_##_###_###_#__ |
+| |..|....|.^..|....|....|.. |
+| 145.76000 >80.00k 147.36000|
++----------------------------+
+```
+
+| Element | Meaning |
+|---|---|
+| `-130/-50` | Scale floor and ceiling in dBm |
+| `64x` and `25.00k` | Bin count and scan step |
+| `146.52000` | The strongest frequency seen |
+| `NORM FM` | Mode (NORM, PEAK, VOX, or PTRL while PATROL runs) and modulation |
+| `25k` | Listen bandwidth |
+| Dotted horizontal line | The trigger level; anything above it gets listened to |
+| Tick rail | A mark per bin, taller at round frequencies, an arrow under the peak |
+| Bottom row | Window start, the navigation step after an arrow glyph (shown as `>`), window end |
+
+### Modes
+
+Press STAR to cycle; the name shows as a banner.
+
+| Mode | What you see | What it does |
+|---|---|---|
+| NORM | Bars | Listens to the strongest signal above the trigger |
+| PEAK | Bars plus slowly sinking peak-hold dots | Same, and remembers peaks |
+| VOX | Only voice-like bins get a bar (short bar possible voice, tall bar likely voice, dot none) with a tick on the top row | Hunts voice; home of PATROL |
+
+### Sweep view keys
+
+| Key | NORM and PEAK | VOX |
+|---|---|---|
+| 1 / 7 | Scan step up / down (0.01k to 100k, wraps) | same |
+| 2 / 8 | Navigation step larger / smaller | `SET LO` / `SET HI`: the PATROL range |
+| 3 / 9 | Scale ceiling up / down 1 dB | same |
+| 4 | Bin count 64, 32, 16, 128 | same |
+| 5 | Type a frequency (STAR is the point, MENU accepts, EXIT backspaces) | same |
+| 6 | Listen bandwidth 25k, 12.5k, 6.25k | same |
+| 0 | Modulation FM, AM, USB | PATROL start or stop |
+| F | Lower the trigger line 1 dB | same |
+| STAR | Next mode | same |
+| UP / DOWN | Move the window | Seek the next voice bin above / below; move the window if none |
+| SIDE1 / SIDE2 | Move the window up / down | same |
+| PTT | Park on the peak (STILL view) | Lock on the voice you hear, banner `LOCKED` |
+| MENU | Hide the peak bin for this window | same; while PATROL is camped, skip that frequency |
+| EXIT | Leave the spectrum | same, stopping PATROL first |
+
+A `LOCKED` voice is released by UP, DOWN, STAR, MENU or any key that restarts the sweep. If you leave with the lock still on, in VFO mode, reverse off and inside the VFO's band, the locked frequency and modulation are carried into that VFO.
+
+### STILL view keys
+
+PTT in NORM or PEAK parks on the peak: the frequency on top, a meter bar, then `S: 9` and `-62 dBm`.
+
+| Key | Does |
+|---|---|
+| UP / DOWN | Tune 1 kHz in FM, 0.5 kHz in AM, 0.1 kHz in USB |
+| STAR / F | Trigger up / down |
+| 3 / 9 | Scale ceiling up / down |
+| 5 | Type a frequency |
+| 0 | Modulation |
+| 6 | Listen bandwidth |
+| SIDE1 | Monitor (open squelch) on or off |
+| SIDE2 | Backlight on or off |
+| PTT | Nothing |
+| EXIT | Back to the sweep |
+
+## PATROL
+
+PATROL is VOX mode left to hunt on its own over a range you set, camping on each voice it finds and moving on when it ends. Full guide: [USER_MANUAL.md](USER_MANUAL.md#8-patrol) and the walkthrough in [README.md](README.md#patrol-hunt-while-you-do-something-else).
+
+### Keys
+
+| Key | In VOX mode does |
+|---|---|
+| 2 | Stores the left edge of the window as the range start, banner `SET LO` |
+| 8 | Stores the right edge of the window as the range stop, banner `SET HI` |
+| 0 | Starts PATROL (label becomes `PTRL`); again stops it |
+| PTT | Locks on the voice you hear, banner `LOCKED`; windows stop advancing |
+| MENU | While camped: skips that frequency until PATROL stops |
+| EXIT | Stops PATROL and leaves the spectrum |
+
+While PATROL runs only 0, MENU, PTT and EXIT do anything. With the backlight off, the first key only wakes the screen.
+
+### Set a range and start
+
+1. **Press STAR** until the banner says `VOX`.
+2. **Tune the window to the bottom of the range** (UP, DOWN, SIDE1, SIDE2 or key 5) and **press 2.** The banner says `SET LO`.
+3. **Tune the window to the top** and **press 8.** The banner says `SET HI`.
+4. **Press 0.** The corner label changes to `PTRL` and the hunt starts from the range start.
+
+The range, with the step and modulation in force when you set it, is remembered across power cycles and a factory reset. With no range stored PATROL walks the window on screen. To change a range, press 2 or 8 again.
+
+This is the life of a PATROL run from the moment you press 0.
+
+```mermaid
+stateDiagram-v2
+    [*] --> SWEEP: press 0
+    SWEEP --> CAMP: voice found
+    CAMP --> SWEEP: voice ends, PResum wait
+    CAMP --> SWEEP: 60 s cap, frequency skipped 2 min
+    CAMP --> SWEEP: MENU, skipped until stop
+    CAMP --> LOCKED: PTT
+    LOCKED --> SWEEP: MENU
+    SWEEP --> STOPPED: 0 or EXIT
+    CAMP --> STOPPED: 0 or EXIT
+    LOCKED --> STOPPED: 0 or EXIT
+    SWEEP --> STOPPED: battery 5 %
+    STOPPED --> [*]
+```
+
+SWEEP walks the range one window at a time and wraps at the top. CAMP listens for the PDwell time, then rechecks and leaves after PResum non-voice checks. At 5 % battery PATROL stops and the spectrum exits so the `LOW BATTERY` screen can show.
+
+### While locked
+
+| While locked, press | Result |
+|---|---|
+| MENU | Skips this frequency until PATROL stops and resumes the hunt |
+| 0 | Stops PATROL; the lock stays, UP or DOWN then releases it |
+| EXIT | Leaves the spectrum; the locked frequency can carry into the VFO |
+| PTT again | Nothing |
+
+### Settings
+
+All in Menu > SCAN with the hint `PATROL ONLY`; the hold-to-sweep VOX mode is unchanged by them.
+
+| Item | Values | What changes |
+|---|---|---|
+| PSens | LOW, NORM, HIGH | LOW wants a cleaner voice before it stops; HIGH stops on weaker signals; NORM is plain VOX behaviour |
+| PSpeed | SLOW, NORM | SLOW takes a steadier read of each bin; NORM is the native rate |
+| PDwell | SHORT, NORM, LONG | Listen 0.5 s, 1 s or 2 s after a hit before the first recheck |
+| PResum | SHORT, NORM, LONG | Move on about 0.3 s, 0.6 s or 1.2 s after the voice ends |
+
+Backlight during PATROL follows BackLt: every key restarts it, ON never dims, OFF never lights. Stopping PATROL lights the screen. A camp never lasts more than 60 seconds; a PTT lock holds for as long as you like.
+
+## Hidden and power-on gestures
+
+| Gesture | Result |
+|---|---|
+| Power on with PTT and SIDE1 held | Reveals the UNLOCK category and opens the menu picker |
+| Any key held at power-on | `RELEASE` / `ALL KEYS` with the key's name; boot continues once everything is released |
+| Hold F on the main screen | Keypad lock on or off, `LOCKED` / `UNLOCKED` |
+| Hold STAR on the main screen | Scan on or off |
+| Hold a digit on the main screen | That digit's F shortcut |
+| Hold MENU on the main screen | The M Long action |
+| Menu > CONFIG > About, then MENU | About screen: version, feature list and the last TX sag; closes on EXIT, MENU, a signal or after about 10 seconds |
+| EXIT on the main screen | Switches VFO A and B (with nothing typed) |
+
+Boot screens per POnMsg: FULL and MESSAGE show `VUURWERK` / `v1.5.1` / `Precision RF`; VOLTAGE shows `VOLTAGE` and the pack voltage and percent; NONE is blank. Each lasts about a second or until a key. Something wrong with the radio shows `BK4819 FAULT` or `EEPROM FAULT` instead; see [USER_MANUAL.md](USER_MANUAL.md#14-troubleshooting).
+
+VUURWERK v1.5.1

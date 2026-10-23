@@ -280,6 +280,8 @@ void UI_DisplaySmallest(const char *pString, uint8_t x, uint8_t y,
 	const uint8_t *p = (const uint8_t *)pString;
 
 	while ((c = *p++) && c != '\0') {
+		if (x > 125)   // VUURWERK v1.5.1 (F9): a glyph is 3 px wide; never write past column 127
+			break;
 		c -= 0x20;
 		for (int i = 0; i < 3; ++i) {
 			pixels = gFont3x5[c][i];

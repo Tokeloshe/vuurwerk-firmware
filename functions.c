@@ -149,9 +149,7 @@ void FUNCTION_Transmit()
 	DTMF_clear_RX();
 #endif
 
-	// clear the DTMF RX live decoder buffer
-	gDTMF_RX_live_timeout = 0;
-	memset(gDTMF_RX_live, 0, sizeof(gDTMF_RX_live));
+	// VUURWERK: G113 dead DTMF RX live decoder buffer clear removed
 
 #if defined(ENABLE_FMRADIO)
 	if (gFmRadioMode)

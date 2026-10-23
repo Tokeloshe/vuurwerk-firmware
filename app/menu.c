@@ -23,6 +23,9 @@
 #include "app/generic.h"
 #include "app/menu.h"
 #include "app/scanner.h"
+#ifdef ENABLE_SPECTRUM
+	#include "app/spectrum.h"   // VUURWERK v1.5.1: patrolSettings, PatrolSaveSettings
+#endif
 #include "audio.h"
 #include "board.h"
 #include "bsp/dp32g030/gpio.h"
@@ -92,17 +95,19 @@ void MENU_StartCssScan(void)
 
 void MENU_CssScanFound(void)
 {
+	// Set up category navigation to TONE category
+	gMenuShowCategoryPicker = false;
+	gSelectedCategory = MCAT_TONE;
+	VUURWERK_MENU_SelectCategory(MCAT_TONE);
+
+	// VUURWERK: G068 set the cursor after SelectCategory, which restores
+	// the remembered TONE item and would otherwise override it
 	if(gScanCssResultType == CODE_TYPE_DIGITAL || gScanCssResultType == CODE_TYPE_REVERSE_DIGITAL) {
 		gMenuCursor = UI_MENU_GetMenuIdx(MENU_R_DCS);
 	}
 	else if(gScanCssResultType == CODE_TYPE_CONTINUOUS_TONE) {
 		gMenuCursor = UI_MENU_GetMenuIdx(MENU_R_CTCS);
 	}
-
-	// Set up category navigation to TONE category
-	gMenuShowCategoryPicker = false;
-	gSelectedCategory = MCAT_TONE;
-	VUURWERK_MENU_SelectCategory(MCAT_TONE);
 
 	// Find the correct position within the category for gMenuCursor
 	for (uint8_t i = 0; i < gCategoryItemCount; i++) {
@@ -120,13 +125,11 @@ void MENU_CssScanFound(void)
 
 void MENU_StopCssScan(void)
 {
-	gCssBackgroundScan = false;
+	SCANNER_Stop();   // VUURWERK: G032 restore the scanned VFO and the receiver
 
 #ifdef ENABLE_VOICE
 	gAnotherVoiceID       = VOICE_ID_SCANNING_STOP;
 #endif
-	gUpdateDisplay = true;
-	gUpdateStatus = true;
 }
 
 int MENU_GetLimits(uint8_t menu_id, int32_t *pMin, int32_t *pMax)
@@ -142,6 +145,20 @@ int MENU_GetLimits(uint8_t menu_id, int32_t *pMin, int32_t *pMax)
 			*pMin = 0;
 			*pMax = STEP_N_ELEM - 1;
 			break;
+
+#ifdef ENABLE_SPECTRUM
+		case MENU_PSENS:
+		case MENU_PDWELL:
+		case MENU_PRESUME:
+			*pMin = 0;
+			*pMax = 2;
+			break;
+
+		case MENU_PSPEED:
+			*pMin = 0;
+			*pMax = 1;
+			break;
+#endif
 
 		case MENU_ABR:
 			*pMin = 0;
@@ -415,6 +432,28 @@ void MENU_AcceptSetting(void)
 			gEeprom.SQUELCH_LEVEL = gSubMenuSelection;
 			gVfoConfigureMode     = VFO_CONFIGURE;
 			break;
+
+#ifdef ENABLE_SPECTRUM
+		case MENU_PSENS:
+			patrolSettings.sensitivity = gSubMenuSelection;
+			PatrolSaveSettings();
+			break;
+
+		case MENU_PSPEED:
+			patrolSettings.speed = gSubMenuSelection;
+			PatrolSaveSettings();
+			break;
+
+		case MENU_PDWELL:
+			patrolSettings.dwell = gSubMenuSelection;
+			PatrolSaveSettings();
+			break;
+
+		case MENU_PRESUME:
+			patrolSettings.resume = gSubMenuSelection;
+			PatrolSaveSettings();
+			break;
+#endif
 
 		case MENU_STEP:
 			gTxVfo->STEP_SETTING = FREQUENCY_GetStepIdxFromSortedIdx(gSubMenuSelection);
@@ -880,6 +919,24 @@ void MENU_ShowCurrentSetting(void)
 			gSubMenuSelection = FREQUENCY_GetSortedIdxFromStepIdx(gTxVfo->STEP_SETTING);
 			break;
 
+#ifdef ENABLE_SPECTRUM
+		case MENU_PSENS:
+			gSubMenuSelection = patrolSettings.sensitivity;
+			break;
+
+		case MENU_PSPEED:
+			gSubMenuSelection = patrolSettings.speed;
+			break;
+
+		case MENU_PDWELL:
+			gSubMenuSelection = patrolSettings.dwell;
+			break;
+
+		case MENU_PRESUME:
+			gSubMenuSelection = patrolSettings.resume;
+			break;
+#endif
+
 		case MENU_TXP:
 			gSubMenuSelection = gTxVfo->OUTPUT_POWER;
 			break;
@@ -1210,6 +1267,7 @@ void MENU_ShowCurrentSetting(void)
 				&gEeprom.KEY_M_LONG_PRESS_ACTION};
 			uint8_t id = *fun[UI_MENU_GetCurrentMenuId()-MENU_F1SHRT];
 
+			gSubMenuSelection = 0;   // VUURWERK: G067 compiled-out action shows NONE, not a wild name
 			for(int i = 0; i < gSubMenu_SIDEFUNCTIONS_size; i++) {
 				if(gSubMenu_SIDEFUNCTIONS[i].id==id) {
 					gSubMenuSelection = i;
@@ -1363,7 +1421,8 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 		return;
 	}
 
-	if (MENU_GetLimits(UI_MENU_GetCurrentMenuId(), &Min, &Max)) {
+	// VUURWERK: G070 a 4-digit range (BatCal) cannot be typed in 3 digits; UP/DOWN only
+	if (MENU_GetLimits(UI_MENU_GetCurrentMenuId(), &Min, &Max) || Max > 999) {
 		gInputBoxIndex = 0;
 		gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
 		return;
@@ -1622,10 +1681,12 @@ static void MENU_Key_STAR(const bool bKeyPressed, const bool bKeyHeld)
 
 	RADIO_SelectVfos();
 
+	// VUURWERK: G122 gRxVfo == gTxVfo: in CROSS BAND the scan would tune
+	// and reset the other VFO, so it double-beeps like AM
 	#ifdef ENABLE_NOAA
-		if (!IS_NOAA_CHANNEL(gRxVfo->CHANNEL_SAVE) && gRxVfo->Modulation == MODULATION_FM)
+		if (!IS_NOAA_CHANNEL(gRxVfo->CHANNEL_SAVE) && gRxVfo == gTxVfo && gRxVfo->Modulation == MODULATION_FM)
 	#else
-		if (gRxVfo->Modulation ==  MODULATION_FM)
+		if (gRxVfo == gTxVfo && gRxVfo->Modulation ==  MODULATION_FM)
 	#endif
 	{
 		if ((UI_MENU_GetCurrentMenuId() == MENU_R_CTCS || UI_MENU_GetCurrentMenuId() == MENU_R_DCS) && gIsInSubMenu)
@@ -1760,7 +1821,8 @@ static void MENU_Key_UP_DOWN(bool bKeyPressed, bool bKeyHeld, int8_t Direction)
 void MENU_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 {
 	// --- Category picker navigation ---
-	if (gMenuShowCategoryPicker) {
+	// VUURWERK: G073 PTT falls through to GENERIC_Key_PTT below
+	if (gMenuShowCategoryPicker && Key != KEY_PTT) {
 		if (bKeyHeld || !bKeyPressed)
 			goto menu_timeout;
 

@@ -296,7 +296,9 @@ void RADIO_ConfigureChannel(const unsigned int VFO, const unsigned int configure
 			const uint8_t d4 = data[4];
 			pVfo->FrequencyReverse  = !!((d4 >> 0) & 1u);
 			pVfo->CHANNEL_BANDWIDTH = !!((d4 >> 1) & 1u);
-			pVfo->OUTPUT_POWER      =   ((d4 >> 2) & 3u);
+			// VUURWERK: G035 power 3 has no calibration triple (filler bytes), use Low
+			const uint8_t pwr = (d4 >> 2) & 3u;
+			pVfo->OUTPUT_POWER      = pwr <= OUTPUT_POWER_HIGH ? pwr : OUTPUT_POWER_LOW;
 			pVfo->BUSY_CHANNEL_LOCK = !!((d4 >> 4) & 1u);
 		}
 

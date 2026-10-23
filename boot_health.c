@@ -30,7 +30,7 @@
  * because each register read returns the same 0xFFFF.
  *
  * The EEPROM probe reads 8 bytes from the factory-programmed battery
- * calibration page (0x1F40) and checks three distinct fault
+ * calibration page (0x1F40) and checks two fault
  * signatures. If every byte equals 0xFF, the I2C bus is floating
  * (no slave responding, pull-ups carry both lines high) or the
  * EEPROM chip is blanked (failed reflash, mass-erase before
@@ -38,20 +38,14 @@
  * (slave or external short to GND holding SDA while the master
  * clocks SCL); the bit-bang I2C_Read in driver/i2c.c reads SDA
  * via GPIO_CheckBit, so a stuck-low line returns 0 on every clocked
- * bit and 0x00 across the page. A second read of the same page
- * is then taken; any byte-divergence between the two reads catches
- * the marginal-bus / stochastic-noise / ESD-residual / signal-
- * integrity failure modes where reads are NEITHER all-0xFF NOR
- * all-0x00 but vary across passes -- the 24LC64 is static storage,
- * the bit-bang driver is deterministic, and no writer runs between
- * the two reads, so two consecutive reads of the same address must
- * be byte-identical on healthy hardware (NXP UM10204 section 3.1.6:
- * single-transaction success does not guarantee bus integrity;
- * multi-pass attestation is canonical for safety-critical bus
- * probes). settings.c:295-301 partial-recovery invariants
+ * bit and 0x00 across the page. v1.5.1: the second read of the
+ * same page and its byte compare, which caught marginal-bus reads
+ * that are neither all-0xFF nor all-0x00 but vary between passes,
+ * was retired to fund PATROL (8 bytes); only the two static
+ * signatures remain. settings.c:295-301 partial-recovery invariants
  * (gBatteryCalibration[0]/[1] never both zero on a factory unit)
- * bound false-positive risk to zero across all three signatures.
- * All three map to the same FAULT_BIT_EEPROM flag because the
+ * bound false-positive risk to zero across both signatures.
+ * Both map to the same FAULT_BIT_EEPROM flag because the
  * welcome-screen banner ("EEPROM FAULT / calib lost") is general
  * enough to cover any of the failure modes; diagnosis path is
  * identical (replace EEPROM or send for hardware service).
@@ -67,9 +61,12 @@
 #include <string.h>
 
 #include "boot_health.h"
+#include "driver/backlight.h"
 #include "driver/bk4819.h"
 #include "driver/bk4819-regs.h"
 #include "driver/eeprom.h"
+#include "driver/st7565.h"
+#include "ui/helper.h"
 
 #define BK4819_FLOATING_SPI_SIGNATURE 0xFFFF
 #define EEPROM_BATTERY_CAL_ADDRESS    0x1F40
@@ -83,6 +80,14 @@ void BOOT_HEALTH_Probe(void)
 {
 	if (BK4819_ReadRegister(BK4819_REG_00) == BK4819_FLOATING_SPI_SIGNATURE) {
 		s_fault |= FAULT_BIT_BK4819;
+		// G040: RADIO_SetupRegisters spins forever on a wedged bus, so draw
+		// the banner now and hold it while REG_00 still floats. A one-off
+		// glitch boots on.
+		UI_PrintString("BK4819", 0, 127, 0, 12);
+		UI_PrintString("FAULT", 0, 127, 3, 12);
+		ST7565_BlitFullScreen();
+		BACKLIGHT_SetBrightness(10);
+		while (BK4819_ReadRegister(BK4819_REG_00) == BK4819_FLOATING_SPI_SIGNATURE) {}
 	}
 
 	uint8_t b[8];
@@ -93,11 +98,6 @@ void BOOT_HEALTH_Probe(void)
 		s_fault |= FAULT_BIT_EEPROM;
 	}
 
-	uint8_t b2[8];
-	EEPROM_ReadBuffer(EEPROM_BATTERY_CAL_ADDRESS, b2, sizeof(b2));
-	if (memcmp(b, b2, sizeof(b)) != 0) {
-		s_fault |= FAULT_BIT_EEPROM;
-	}
 }
 
 bool BOOT_HEALTH_HasFault(void)

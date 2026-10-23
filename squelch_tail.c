@@ -62,18 +62,20 @@ void SQUELCH_TAIL_Process(void)
 		return;
 	}
 
-	// CTCSS: poll the found bit from BK4819 REG_0C (live, per tick).
-	// DCS: use the interrupt-maintained detect state. v1.3.3 POLARITY FIX:
+	// CTCSS and DCS both use the interrupt-maintained detect state.
+	// G054: CTCSS used to poll REG_0C bit 1, documented as the squelch
+	// result rather than tone presence; g_CTCSS_Lost is the flag stock
+	// HandleIncoming/HandleReceive act on. v1.3.3 POLARITY FIX:
 	// in this firmware g_CDCSS_Lost == true means the code IS PRESENT (the
-	// "quiet was lost" sense, same as g_SquelchLost/g_VOX_Lost) -- it is
-	// exactly the condition HandleIncoming opens audio on and HandleReceive
-	// treats as "keep RX open" (app.c: g_CDCSS_Lost && CDCSS_POSITIVE_CODE).
+	// "quiet was lost" sense, same as g_SquelchLost/g_VOX_Lost; g_CTCSS_Lost
+	// too) -- it is exactly the condition HandleIncoming opens audio on and
+	// HandleReceive treats as "keep RX open" (app.c: g_CDCSS_Lost && CDCSS_POSITIVE_CODE).
 	// The v1.3.1 T4 code used !g_CDCSS_Lost, which was inverted and chopped
 	// real DCS receptions. Match the stock detect condition, polarity and all.
 	const bool is_dcs = (gCurrentCodeType != CODE_TYPE_CONTINUOUS_TONE);
 	const bool tone_present = is_dcs
 		? (g_CDCSS_Lost && gCDCSSCodeType == CDCSS_POSITIVE_CODE)
-		: ((BK4819_ReadRegister(BK4819_REG_0C) >> 1) & 1);
+		: g_CTCSS_Lost;
 
 	switch (gSquelchTail.state) {
 	case STE_MONITORING:

@@ -3,12 +3,13 @@ ENTRY(HandlerReset)
 _estack = 0x20004000;    /* end of 16K RAM */
 
 _Min_Heap_Size = 0;      /* required amount of heap  */
-/* VUURWERK v1.3.1 (C2): 0x80 -> 0x400. This is a link-time guarantee, not a
-   runtime allocation: the stack always grows down from _estack into whatever
-   RAM .bss leaves free (~12 KB today). At 0x80 the link check was weaker than
-   the measured ~350 B worst-case call depth; 0x400 makes the link fail loudly
-   if static RAM ever grows into the stack margin. */
-_Min_Stack_Size = 0x400; /* required amount of stack */
+/* VUURWERK v1.3.1 (C2), G100: 0x80 -> 0x400 -> 0x800. This is a link-time
+   guarantee, not a runtime allocation: the stack always grows down from
+   _estack into whatever RAM .bss leaves free (~12 KB today). The old ~350 B
+   figure was wrong: the static call-graph bound is ~950 B plus a 32-36 B
+   SysTick frame, and everyday peaks are ~690-710 B. 0x800 keeps ~1 KB of real
+   margin and makes the link fail loudly if static RAM ever grows into it. */
+_Min_Stack_Size = 0x800; /* required amount of stack */
 
 MEMORY
 {

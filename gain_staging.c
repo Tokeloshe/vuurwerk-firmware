@@ -21,33 +21,37 @@
 #include "settings.h"
 #include "signal_classifier.h"
 #include "app/chFrScanner.h"   // VUURWERK v1.2.8: gScanStateDir for the scan guard
+#include "vfo_split.h"         // G044: split_state hop guard
 
 GainStaging_t gGainStaging[2];
 
 // Frequency change detection (per-VFO, like AM_fix)
 static uint32_t last_frequency[2] = {0, 0};
 
+// G036: REG_13 is one chip register, so one write cache serves both
+// VFOs (a per-VFO cache left the watch VFO on the other's gain).
+// 0xFF = unknown, forces the next write.
+static uint8_t reg13_index;
+
 // Target RSSI in raw BK4819 units: (dBm + 160) * 2
 // FM: -75 dBm target (FM limiter has headroom, run higher gain)
 #define FM_TARGET_RSSI  ((int16_t)((-75 + 160) * 2))
 
 // v1.2.7: statified (zero external callers).
+// G036: also writes the stock gain, so the shared cache stays exact.
 static void GAIN_STAGING_Reset(uint8_t vfo)
 {
     if (vfo > 1) return;
-    gGainStaging[vfo].table_index      = 0;  // Back to stock gain
-    gGainStaging[vfo].table_index_prev = 0;
-    gGainStaging[vfo].prev_rssi        = 0;
-    gGainStaging[vfo].hold_counter     = 0;
+    gGainStaging[vfo].table_index  = 0;  // Back to stock gain
+    gGainStaging[vfo].prev_rssi    = 0;
+    gGainStaging[vfo].hold_counter = 0;
+    BK4819_WriteRegister(BK4819_REG_13, gain_table[0].reg_val);
+    reg13_index = 0;
 }
 
 void GAIN_STAGING_10ms(uint8_t vfo)
 {
     if (vfo > 1) return;
-
-    // === GUARD: FM mode only -- AM_fix owns REG_13 in AM/USB ===
-    if (gRxVfo->Modulation != MODULATION_FM)
-        return;
 
     // === VUURWERK v1.2.8: yield to the BK4819 hardware AGC during scan ===
     // The per-hop freq-change reset plus the release off-by-one would pin
@@ -57,26 +61,31 @@ void GAIN_STAGING_10ms(uint8_t vfo)
     // scanning". Restore the stock REG_13 baseline once and let the hardware
     // AGC own gain while scanning, matching stock egzumer scan behaviour.
     // Covers both the frequency-sweep and memory-channel scan paths.
-    if (gScanStateDir != SCAN_OFF) {
-        if (last_frequency[vfo] != 0) {     // run once on scan entry
-            last_frequency[vfo] = 0;        // force a clean reset when scan ends
+    // G045: FM only. Leaving FM gets the same one-shot stock restore (in
+    // USB nothing else rewrites REG_13, so a pulled-down rung would stick;
+    // AM_fix owns it in AM). Keyed on either VFO: REG_13 is shared.
+    if (gRxVfo->Modulation != MODULATION_FM || gScanStateDir != SCAN_OFF) {
+        if (last_frequency[0] | last_frequency[1]) {   // run once on entry
+            last_frequency[0] = 0;   // force a clean reset on return
+            last_frequency[1] = 0;
             GAIN_STAGING_Reset(vfo);
-            BK4819_WriteRegister(BK4819_REG_13, gain_table[0].reg_val);
         }
         return;
     }
 
     // === GUARD: Only during FOREGROUND (idle) and RX -- skip TX and power save ===
-    if (gCurrentFunction != FUNCTION_FOREGROUND && !FUNCTION_IsRx())
+    // G044: and not while a Split hop has the chip on VFO B's channel, or
+    // A's gain is adapted to B's signal.
+    if ((gCurrentFunction != FUNCTION_FOREGROUND && !FUNCTION_IsRx()) ||
+        split_state != SPLIT_STATE_IDLE)
         return;
 
     // === FREQUENCY CHANGE DETECTION (like AM_fix) ===
     const uint32_t freq = gEeprom.VfoInfo[vfo].pRX->Frequency;
     if (freq != last_frequency[vfo]) {
         last_frequency[vfo] = freq;
+        // Writes stock gain immediately so the new channel starts clean
         GAIN_STAGING_Reset(vfo);
-        // Write stock gain immediately so the new channel starts clean
-        BK4819_WriteRegister(BK4819_REG_13, gain_table[0].reg_val);
         return;  // Let next tick start fresh
     }
 
@@ -85,17 +94,16 @@ void GAIN_STAGING_10ms(uint8_t vfo)
     GainStaging_t *gs = &gGainStaging[vfo];
 
     // === VUURWERK v1.3.0 (F2): REG_13 refresh heartbeat ===
-    // REG_13 is one physical register but this module gates writes on a
-    // per-VFO index cache, so a dual-watch flip (RADIO_SetupAGC cache
-    // skips FM->FM) or a spectrum-exit register edit leaves REG_13
-    // carrying someone else's gain while we believe ours is applied.
+    // Writes gate on the REG_13 index cache, so a register edit by
+    // another owner (spectrum exit, AGC init) leaves REG_13 carrying
+    // someone else's gain while we believe ours is applied.
     // Once a second, invalidate the cache so the write-gate below
     // re-asserts this VFO's gain. Sits after all guards: never fires
     // during TX, AM (am_fix owns REG_13), scan, or power save.
     static uint8_t hb_ticks;
     if (++hb_ticks >= 100) {
         hb_ticks = 0;
-        gs->table_index_prev = 0xFF;   // out-of-range sentinel forces rewrite
+        reg13_index = 0xFF;            // out-of-range sentinel forces rewrite
     }
 
     // Average with previous reading (spike immunity)
@@ -170,9 +178,9 @@ void GAIN_STAGING_10ms(uint8_t vfo)
 
     // === APPLY TO REG_13 ===
     // Write only when the index has actually changed (minimize SPI bus traffic)
-    if (gs->table_index != gs->table_index_prev) {
+    if (gs->table_index != reg13_index) {
         BK4819_WriteRegister(BK4819_REG_13, gain_table[gs->table_index].reg_val);
-        gs->table_index_prev = gs->table_index;
+        reg13_index = gs->table_index;
     }
 }
 

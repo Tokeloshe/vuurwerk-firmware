@@ -10,10 +10,12 @@
 #include <stdbool.h>
 
 // Stub global variables
-extern char gDTMF_String[15];
 extern char gDTMF_InputBox[15];
-extern uint8_t gDTMF_InputBox_Index;
-extern bool gDTMF_InputMode;
+// G112: nothing can enter DTMF input mode, so each use is a fresh zeroed
+// temporary: every read folds to 0 and the dead input-mode code drops out
+#define gDTMF_String         ((char[15]){0})
+#define gDTMF_InputBox_Index ((uint8_t){0})
+#define gDTMF_InputMode      ((bool){false})
 extern char gDTMF_RX_live[20];
 extern uint8_t gDTMF_RX_live_timeout;
 extern const uint8_t DTMF_RX_live_timeout_500ms;

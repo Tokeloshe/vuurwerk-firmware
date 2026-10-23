@@ -33,9 +33,10 @@ SmartSquelchState_t gSmartSquelch = {
 
 // Integer EWMA: alpha = 1/8, no division, no floats
 // tau = 1/(1-alpha) * tick = 8 * 10ms = 80ms
+// G049: +4 rounds to nearest; the bare shift floored and settled up to 7 low.
 static inline uint16_t ewma_update(uint16_t old_val, uint16_t new_sample)
 {
-	return old_val + (((int16_t)(new_sample - old_val)) >> 3);
+	return old_val + ((((int16_t)(new_sample - old_val)) + 4) >> 3);
 }
 
 // v1.3.1 (T1): single REG_78 baseline writer, shared by the F7 RX-end
@@ -64,10 +65,10 @@ static uint8_t compute_voice_probability(
 
 	// Noise indicator (strongest voice predictor)
 	// Low noise after demod = clean audio = voice
+	// G114: REG_65 is 7-bit, so noise stays in 0..127
 	if      (noise < 30)  score += 35;
 	else if (noise < 60)  score += 25;
 	else if (noise < 100) score += 10;
-	else if (noise > 200) score -= 15;
 
 	// Glitch indicator (interference rejector)
 	// Low glitch = stable signal, not transient interference
@@ -87,9 +88,6 @@ static uint8_t compute_voice_probability(
 	// Voice: low noise AND low-moderate glitch (not dead-still)
 	if (noise < 60 && glitch < 40 && glitch > 5)
 		score += 10;
-	// Double-bad: definitely not voice
-	if (noise > 150 && glitch > 100)
-		score -= 10;
 
 	if (score < 0)   score = 0;
 	if (score > 100) score = 100;
@@ -168,6 +166,11 @@ void SMART_SQUELCH_Update(void)
 			return;
 		}
 
+		// G027: the histogram is fed here, while parked, so its mode is the
+		// idle noise floor rather than the level of the stations heard.
+		const uint16_t prssi = BK4819_GetRSSI();
+		RSSI_HISTOGRAM_Update(pvfo, (int16_t)(prssi >> 1) - 160);
+
 		// No adaptive floor yet: stay strictly at baseline.
 		if (!gRSSI_Histogram[pvfo].valid) {
 			if (parked_bias) {
@@ -177,7 +180,7 @@ void SMART_SQUELCH_Update(void)
 			return;
 		}
 
-		gSmartSquelch.rssi_smooth   = ewma_update(gSmartSquelch.rssi_smooth,   BK4819_GetRSSI());
+		gSmartSquelch.rssi_smooth   = ewma_update(gSmartSquelch.rssi_smooth,   prssi);
 		gSmartSquelch.noise_smooth  = ewma_update(gSmartSquelch.noise_smooth,  BK4819_GetExNoiceIndicator());
 		gSmartSquelch.glitch_smooth = ewma_update(gSmartSquelch.glitch_smooth, BK4819_GetGlitchIndicator());
 		gSmartSquelch.noise_floor   = (int16_t)(gRSSI_Histogram[pvfo].noise_floor_dbm + 160) * 2;

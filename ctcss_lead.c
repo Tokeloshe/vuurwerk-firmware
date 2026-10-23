@@ -16,7 +16,9 @@
 
 #include "ctcss_lead.h"
 #include "driver/bk4819.h"
+#include "misc.h"
 #include "radio.h"
+#include "tx_soft_start.h"
 
 #define TONE_LEAD_TICKS 15   // 150ms at 10ms/tick
 
@@ -26,8 +28,9 @@ static uint8_t s_countdown;
 
 void CTCSS_LEAD_Start(void)
 {
-	// Only use tone lead if channel has CTCSS or DCS enabled
-	if (gCurrentVfo->pTX->CodeType == CODE_TYPE_OFF) {
+	// Only use tone lead if channel has CTCSS or DCS enabled, and only on FM:
+	// ExitTxMute writes the FM REG_50 value over the AM/USB TX setting (G039)
+	if (gCurrentVfo->pTX->CodeType == CODE_TYPE_OFF || gCurrentVfo->Modulation != MODULATION_FM) {
 		s_countdown = 0;
 		return;
 	}
@@ -50,6 +53,15 @@ void CTCSS_LEAD_Process(void)
 
 void CTCSS_LEAD_Stop(void)
 {
+	// End-of-TX hook (only caller: APP_EndTransmission). G037: stop an
+	// unfinished PA ramp so it cannot rewrite the bias during the RTTE window,
+	// and keep a TOT falling due before that window ends (roger + CSS tail +
+	// up to 1 s RTTE, under 3.5 s) from ending TX twice
+	gTxSoftStart.active = false;
+	if (gTxTimerCountdown_500ms < 8)
+		gTxTimerCountdown_500ms = 0;
+	gTxTimeoutReached = false;
+
 	if (s_countdown != 0) {
 		// PTT released before lead-in finished -- ensure mic is unmuted
 		BK4819_ExitTxMute();

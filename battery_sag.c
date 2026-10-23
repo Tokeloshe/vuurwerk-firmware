@@ -39,6 +39,8 @@
 #include "misc.h"                    // v1.3.1 (U6): gUpdateDisplay
 #include "toast.h"                   // v1.3.1 (U6): sag toast
 
+extern uint16_t lowBatteryCountdown;  // helper/battery.c
+
 static bool     s_was_tx;
 static uint16_t s_pre_tx;
 static uint16_t s_min_tx;
@@ -56,6 +58,8 @@ void BATTERY_SAG_Tick500ms(void)
 		if (gBatteryVoltageAverage < s_min_tx)
 			s_min_tx = gBatteryVoltageAverage;
 	} else if (s_was_tx) {
+		// G056: restart the 15 s low-battery confirmation on unloaded readings
+		lowBatteryCountdown = 0;
 		s_last_sag = (s_pre_tx >= s_min_tx) ? (s_pre_tx - s_min_tx) : 0;
 
 		// v1.3.1 (U6): the sag value was computed and never shown anywhere.

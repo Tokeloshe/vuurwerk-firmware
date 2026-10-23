@@ -571,6 +571,10 @@ bool UART_IsCommandAvailable(void)
 	
 	CRC = UART_Command.Buffer[Size] | (UART_Command.Buffer[Size + 1] << 8);
 
+	// VUURWERK: G085 drop a 051D write whose data Size runs past the received frame
+	if (UART_Command.Header.ID == 0x051D && ((const CMD_051D_t *)UART_Command.Buffer)->Size + sizeof(CMD_051D_t) > Size)
+		return false;
+
 	return (CRC_Calculate(UART_Command.Buffer, Size) != CRC) ? false : true;
 }
 

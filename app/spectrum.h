@@ -119,6 +119,28 @@ typedef struct SpectrumSettings {
   bool backlightState;
 } SpectrumSettings;
 
+// VUURWERK v1.5.1: PATROL, a latched/unattended extension of the existing
+// VOX voice-seeking sweep (spectrum_mode == 2). These settings apply to
+// patrol only -- hold-to-sweep keeps using its own hardcoded constants,
+// never these. See the PATROL tuning block in app/spectrum.c.
+typedef struct PatrolSettings {
+  uint8_t  sensitivity; // 0 Low, 1 Normal (default), 2 High
+  uint8_t  speed;       // 0 Slow, 1 Normal (default)
+  uint8_t  dwell;       // 0 Short, 1 Normal (default), 2 Long: hold after a hit
+  uint8_t  resume;      // 0 Short, 1 Normal (default), 2 Long
+  uint8_t  step;        // ScanStep index captured with the range, or PATROL_STEP_VIEW
+  uint8_t  modulation;  // VUURWERK: G095 ModulationMode_t captured with the range, 0xF = follow the view
+  uint32_t rangeStart;  // 10 Hz units; 0 = unset, patrol the window on screen
+  uint32_t rangeStop;   // 10 Hz units; 0 = unset
+} PatrolSettings;
+
+#define PATROL_STEP_VIEW 0x0F   // sweep at whatever step the view is set to
+
+extern PatrolSettings patrolSettings;
+extern bool           patrolActive;
+void PatrolSaveSettings(void);   // called by app/menu.c when a patrol setting changes
+void PatrolLoadSettings(void);   // v1.5.1 (F2): called once from Main() at boot
+
 typedef struct KeyboardState {
   KEY_Code_t current;
   KEY_Code_t prev;

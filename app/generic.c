@@ -105,7 +105,7 @@ void GENERIC_Key_PTT(bool bKeyPressed)
 		if (gCurrentFunction == FUNCTION_TRANSMIT) {	
 			// we are transmitting .. stop
 			if (gFlagEndTransmission) {
-				FUNCTION_Select(FUNCTION_FOREGROUND);
+				RADIO_SetupRegisters(true); // VUURWERK: G110 full RX setup after a TX timeout
 			}
 			else {
 				APP_EndTransmission();

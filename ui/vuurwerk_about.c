@@ -17,6 +17,7 @@
 #include "ui/main.h"
 #include "ui/ui.h"
 #include "ui/helper.h"
+#include "driver/bk4819.h"
 #include "driver/keyboard.h"
 #include "driver/st7565.h"
 #include "driver/system.h"
@@ -29,6 +30,10 @@ static void drain_keys(void) {
 }
 
 void VUURWERK_ABOUT_Show(void) {
+    // G066: a new BK4819 interrupt (squelch, tone) closes About so the main
+    // loop services it; a request already pending at entry is not a trigger.
+    const uint16_t irq = BK4819_ReadRegister(BK4819_REG_0C) & 1u;
+
     memset(gFrameBuffer, 0, sizeof(gFrameBuffer));
 
     // v1.3.3: layout fits rows 0..6 (gFrameBuffer has no row 7). The sag
@@ -54,7 +59,8 @@ void VUURWERK_ABOUT_Show(void) {
     uint16_t timeout = 500;
     while (timeout-- > 0) {
         KEY_Code_t key = KEYBOARD_Poll();
-        if (key == KEY_EXIT || key == KEY_MENU)
+        if (key == KEY_EXIT || key == KEY_MENU
+            || (BK4819_ReadRegister(BK4819_REG_0C) & 1u) > irq)
             break;
         SYSTEM_DelayMs(20);
     }

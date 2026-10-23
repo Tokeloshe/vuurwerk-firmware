@@ -71,7 +71,8 @@ void UI_DisplayScanner(void)
 		} else if (gScanCssState == SCAN_CSS_STATE_FOUND) {
 			pPrintStr = "SCAN CMP.";
 		} else {
-			pPrintStr = "SCAN FAIL.";
+			// VUURWERK: G081 only the pre-flight gate fails with the indicator at 0
+			pPrintStr = gScanProgressIndicator ? "SCAN FAIL." : "NO SIGNAL";
 		}
 	}
 

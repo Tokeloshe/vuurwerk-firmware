@@ -57,18 +57,29 @@ void RSSI_HISTOGRAM_Update(uint8_t vfo, int16_t rssi_dbm) {
 
     RSSI_Histogram_t *h = &gRSSI_Histogram[vfo];
 
-    // Convert RSSI to bin index
-    int16_t bin_idx = (rssi_dbm - RSSI_HIST_MIN) / RSSI_HIST_BIN_WIDTH;
+    // Bin index without a divide (LAW 4: Cortex-M0 has no divider). Clamp
+    // to the table's span first, then x/3 == (x*171)>>9, exact for x < 512.
+    // The clamped x tops out at 95, which lands in the last bin directly.
+    int16_t x = rssi_dbm - RSSI_HIST_MIN;
+    if (x < 0) x = 0;
+    if (x > RSSI_HIST_BINS * RSSI_HIST_BIN_WIDTH - 1) x = RSSI_HIST_BINS * RSSI_HIST_BIN_WIDTH - 1;
+    const uint8_t bin_idx = (uint8_t)(((uint16_t)x * 171u) >> 9);
 
-    if (bin_idx < 0) bin_idx = 0;
-    if (bin_idx >= RSSI_HIST_BINS) bin_idx = RSSI_HIST_BINS - 1;
+    h->bins[bin_idx]++;
 
-    // Increment bin (with saturation)
-    if (h->bins[bin_idx] < 0xFFFF) {
-        h->bins[bin_idx]++;
+    // v1.5.1: exponential forgetting. total_samples used to climb to 65535
+    // and wrap to 0, which flagged the histogram invalid for the next 100
+    // samples (about once every 11 minutes of continuous RX the smart squelch
+    // lost its noise floor and the parked pre-bias let go for a second), and
+    // the bins saturated into a lifetime noise floor that never adapted to a
+    // new site. Halving at 0x8000 keeps every count in range forever and
+    // weights the floor toward recent conditions. No bin can now reach
+    // 0xFFFF, so the old per-bin saturation test is gone with it.
+    if (++h->total_samples >= 0x8000) {
+        for (uint8_t i = 0; i < RSSI_HIST_BINS; i++)
+            h->bins[i] >>= 1;
+        h->total_samples >>= 1;
     }
-
-    h->total_samples++;
 
     // Auto-analyze every 256 samples
     if ((h->total_samples & 0xFF) == 0) {

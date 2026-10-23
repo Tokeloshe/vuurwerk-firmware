@@ -4,8 +4,6 @@ VUURWERK is free and always will be. It is built by one developer, nights and
 weekends, on a $30 radio. If it has made your UV-K5 a better radio, here are
 three ways to support the work, from easiest to free.
 
----
-
 ## 1. Buy Me a Coffee (easiest)
 
 One click, any card, no crypto wallet needed.
@@ -27,8 +25,6 @@ One click, any card, no crypto wallet needed.
 
 Every coffee goes straight back into the project: test radios, antennas,
 bench gear, and the late nights that turn field reports into fixes.
-
----
 
 ## 2. Donate via XRP (Ripple)
 
@@ -58,8 +54,6 @@ rf82s1CDagppvM6ATqc1nSrL6GackzHJrm
 If your wallet asks for a "Destination Tag" instead of "Memo", enter the same
 number: `2621443948`. They are the same thing.
 
----
-
 ## 3. Support without spending a cent
 
 These matter more than you'd think:
@@ -71,8 +65,6 @@ These matter more than you'd think:
   best fixes in this firmware. Some of VUURWERK's most important improvements
   started as a single operator taking the time to describe exactly what their
   radio did.
-
----
 
 ## Thank You
 
@@ -89,3 +81,4 @@ or just a kind word on the forums, it all matters.
 ---
 
 *VUURWERK (Afrikaans: fireworks). Light in the dark. Signal through the noise.*
+Back to the [README](README.md).

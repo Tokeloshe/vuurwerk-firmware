@@ -473,6 +473,7 @@ void BOARD_ADC_Init(void)
 	Config.IE_CHx_EOC         = SARADC_IE_CHx_EOC_VALUE_NONE;
 	Config.IE_FIFO_FULL       = SARADC_IE_FIFO_FULL_VALUE_DISABLE;
 	Config.IE_FIFO_HFULL      = SARADC_IE_FIFO_HFULL_VALUE_DISABLE;
+	Config.EXTTRIG_SEL        = 0; // VUURWERK: G103 was read uninitialised by ADC_Configure
 
 	ADC_Configure(&Config);
 	ADC_Enable();

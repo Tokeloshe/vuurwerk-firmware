@@ -56,56 +56,35 @@ const char* VUURWERK_MENU_GetCategoryName(uint8_t cat)
 // Width budget: 31 chars max at 4 px/char in gFont3x5 (128 px line).
 // v1.4.4: longest hints tightened to fund the F+EXIT reset-to-simplex rescue.
 static const char sHintPool[] =
-	"REPEATER OFFSET DIR +/-\0"         // MENU_SFT_D   (v1.4.4 trims: NUL-walked,
-	"REPEATER OFFSET FREQUENCY\0"       // MENU_OFFSET   order-matched to sHintIds --
-	"FM BANDWIDTH WIDE/NARROW\0"        // MENU_W_N      offsets not used)
-	"NO TX WHILE BUSY\0"                // MENU_BCL
-	"AUDIO COMPANDER (NOISE CUT)\0"     // MENU_COMPAND
-	"DEMODULATOR FM/AM/USB\0"           // MENU_AM
-	"ADD CHANNEL TO SCAN LIST 1\0"      // MENU_S_ADD1
-	"ADD CHANNEL TO SCAN LIST 2\0"      // MENU_S_ADD2
-	"SCAN LIST TO SCAN: 1/2/ALL\0"      // MENU_S_LIST
-	"VIEW SCAN LIST 1 CHANNELS\0"       // MENU_SLIST1
-	"VIEW SCAN LIST 2 CHANNELS\0"       // MENU_SLIST2
-	"SCAN RESUME MODE\0"                // MENU_SC_REV
-	"SIDE1 SHORT PRESS\0"               // MENU_F1SHRT
-	"SIDE1 LONG PRESS\0"                // MENU_F1LONG
-	"SIDE2 SHORT PRESS\0"               // MENU_F2SHRT
-	"SIDE2 LONG PRESS\0"                // MENU_F2LONG
-	"MENU LONG PRESS\0"                 // MENU_MLONG
-	"AUTO KEYPAD LOCK\0"                // 467  MENU_AUTOLK
-	"TX TIMEOUT LIMIT\0"                // 484  MENU_TOT
-	"BATTERY SAVE DUTY CYCLE\0"         // 501  MENU_SAVE
-	"CH DISPLAY FREQ/NAME/NR\0"         // MENU_MDF
-	"POWER-ON SCREEN MESSAGE\0"         // 555  MENU_PONMSG
-	"BATTERY READOUT: VOLTS/PCT\0"      // 579  MENU_BAT_TXT
-	"BACKLIGHT AUTO-OFF TIME\0"         // 606  MENU_ABR
-	"BACKLIGHT MIN BRIGHTNESS\0"        // 630  MENU_ABR_MIN
-	"BACKLIGHT MAX BRIGHTNESS\0"        // 655  MENU_ABR_MAX
-	"BACKLIGHT ON DURING TX/RX\0"       // 680  MENU_ABR_ON_TX_RX
-	"MUTE SQUELCH TAIL ON RX END\0"     // 706  MENU_STE
-	"REPEATER SQUELCH TAIL DELAY\0"     // 734  MENU_RP_STE
-	"ONE-KEY PRIORITY CHANNEL\0"        // 762  MENU_1_CALL
-	"DTMF TX-START CODE\0"              // 787  MENU_UPCODE
-	"DTMF TX-END CODE\0"                // 806  MENU_DWCODE
-	"SEND DTMF ID ON PTT\0"             // 823  MENU_PTT_ID
-	"DTMF SIDETONE IN SPEAKER\0"        // 843  MENU_D_ST
-	"DTMF PRE-TONE DELAY\0"             // 868  MENU_D_PRE
-	"LIVE DTMF DECODER ON SCREEN\0"     // 888  MENU_D_LIVE_DEC
-	"AM OVERLOAD AUTO GAIN FIX\0"       // 916  MENU_AM_FIX
-	"BATTERY VOLTAGE READOUT\0"         // 942  MENU_VOL
-	"DUAL WATCH / CROSSBAND RX\0"       // 966  MENU_TDR
-	"WATCH OTHER VFO IN SCAN";          // MENU_SCANWATCH
+	"RPT OFFSET DIR\0"
+	"RPT OFFSET FREQ\0"
+	"WIDE/NARROW\0"
+	"NO TX IF BUSY\0"
+	"FM/AM/USB\0"
+	"TO LIST 1\0"
+	"TO LIST 2\0"
+	"LIST 1/2/ALL\0"
+	"SCAN RESUME\0"
+	"SIDE1 SHORT\0"
+	"SIDE1 LONG\0"
+	"SIDE2 SHORT\0"
+	"SIDE2 LONG\0"
+	"BOOT SCREEN\0"
+	"BAT VOLTS/PCT\0"
+	"LIGHT ON TX/RX\0"
+	"MUTE SQL TAIL\0"
+	"RPT TAIL DELAY\0"
+	"DTMF ID\0"
+	"1750/APOLLO SIDETONE\0"   // G062: the only tones D ST gates
+	"DUAL WATCH/XBAND\0"
+	"WATCH OTHER VFO";
 
 static const uint8_t sHintIds[] = {
-	MENU_SFT_D,   MENU_OFFSET,  MENU_W_N,     MENU_BCL,     MENU_COMPAND,
-	MENU_AM,      MENU_S_ADD1,  MENU_S_ADD2,  MENU_S_LIST,  MENU_SLIST1,
-	MENU_SLIST2,  MENU_SC_REV,  MENU_F1SHRT,  MENU_F1LONG,  MENU_F2SHRT,
-	MENU_F2LONG,  MENU_MLONG,   MENU_AUTOLK,  MENU_TOT,     MENU_SAVE,
-	MENU_MDF,     MENU_PONMSG,  MENU_BAT_TXT, MENU_ABR,     MENU_ABR_MIN,
-	MENU_ABR_MAX, MENU_ABR_ON_TX_RX, MENU_STE, MENU_RP_STE, MENU_1_CALL,
-	MENU_UPCODE,  MENU_DWCODE,  MENU_PTT_ID,  MENU_D_ST,    MENU_D_PRE,
-	MENU_D_LIVE_DEC, MENU_AM_FIX, MENU_VOL,   MENU_TDR,     MENU_SCANWATCH,
+	MENU_SFT_D, MENU_OFFSET, MENU_W_N, MENU_BCL, MENU_AM,
+	MENU_S_ADD1, MENU_S_ADD2, MENU_S_LIST, MENU_SC_REV, MENU_F1SHRT,
+	MENU_F1LONG, MENU_F2SHRT, MENU_F2LONG, MENU_PONMSG, MENU_BAT_TXT,
+	MENU_ABR_ON_TX_RX, MENU_STE, MENU_RP_STE, MENU_PTT_ID, MENU_D_ST,
+	MENU_TDR, MENU_SCANWATCH,   // G096: 1 Call dropped, nothing recalls it
 };
 
 // VUURWERK v1.3.3 reclamation: the 80-byte sHintOffsets table was removable
@@ -114,6 +93,10 @@ static const uint8_t sHintIds[] = {
 // "regenerate every offset by hand when editing a hint" maintenance hazard.
 const char* VUURWERK_MENU_GetHint(uint8_t menu_id)
 {
+	// G030: PSens..PResum are the last four ids and share one hint
+	if ((uint8_t)(menu_id - MENU_PSENS) < 4)
+		return "PATROL ONLY";
+
 	const char *p = sHintPool;
 	for (uint8_t i = 0; i < ARRAY_SIZE(sHintIds); i++) {
 		if (sHintIds[i] == menu_id)
@@ -164,13 +147,17 @@ uint8_t VUURWERK_MENU_GetCategoryForMenuId(uint8_t menu_id)
 		case MENU_MIC:
 		case MENU_BCL:
 		case MENU_ROGER:
-		case MENU_UPCODE:       // was DTMF category
-		case MENU_DWCODE:       // was DTMF category
-		case MENU_PTT_ID:       // was DTMF category
+		case MENU_PTT_ID:       // was DTMF category (APOLLO is the live mode)
 		case MENU_D_ST:         // was DTMF category
-		case MENU_D_PRE:        // was DTMF category
-		case MENU_D_LIVE_DEC:   // was DTMF category
 			return MCAT_TRANSMIT;
+
+		// G062: hidden. DTMF is stubbed, so these do nothing; MCAT_COUNT
+		// matches no picker category. EEPROM and CHIRP layout unchanged.
+		case MENU_UPCODE:
+		case MENU_DWCODE:
+		case MENU_D_PRE:
+		case MENU_D_LIVE_DEC:
+			return MCAT_COUNT;
 
 		// SCAN
 		case MENU_S_LIST:
@@ -180,6 +167,10 @@ uint8_t VUURWERK_MENU_GetCategoryForMenuId(uint8_t menu_id)
 		case MENU_S_ADD2:
 		case MENU_SC_REV:
 		case MENU_SCANWATCH:    // Scan+Watch + VFO Split
+		case MENU_PSENS:        // VUURWERK PATROL settings
+		case MENU_PSPEED:
+		case MENU_PDWELL:
+		case MENU_PRESUME:
 			return MCAT_SCAN;
 
 		// CHANNEL

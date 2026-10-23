@@ -48,8 +48,6 @@
 
 center_line_t center_line = CENTER_LINE_NONE;
 
-uint16_t gScreenChannelGuardTrips = 0;
-
 const int8_t dBmCorrTable[7] = {
 			-15, // band 1
 			-25, // band 2
@@ -316,8 +314,11 @@ void UI_MAIN_TimeSlice500ms(void)
 		return;
 #endif
 
-		if(FUNCTION_IsRx()) {
-			DisplayRSSIBar(true);
+		// VUURWERK: G034 full repaint keeps the TX timer, RX line, Q bars and scope live
+		if(gCurrentFunction == FUNCTION_TRANSMIT || FUNCTION_IsRx() ||
+		   (gCurrentFunction == FUNCTION_FOREGROUND && BANDSCOPE_IsEnabled())) {
+			gUpdateDisplay = true;
+			gUpdateStatus = true;
 		}
 	}
 }
@@ -361,17 +362,7 @@ void UI_DisplayMain(void)
 
 		if (activeTxVFO != vfo_num) // this is not active TX VFO
 		{
-#ifdef ENABLE_SCAN_RANGES
-			if(gScanRangeStart) {
-				UI_PrintString("ScnRng", 5, 0, line, 8);
-				sprintf(String, "%3u.%05u", gScanRangeStart / 100000, gScanRangeStart % 100000);
-				UI_PrintStringSmallNormal(String, 56, 0, line);
-				sprintf(String, "%3u.%05u", gScanRangeStop / 100000, gScanRangeStop % 100000);
-				UI_PrintStringSmallNormal(String, 56, 0, line + 1);
-				continue;
-			}
-#endif
-
+			// VUURWERK: G101 dead ScnRng display removed (no scan-range entry)
 
 			if (gDTMF_InputMode
 #ifdef ENABLE_DTMF_CALLING
@@ -556,14 +547,7 @@ void UI_DisplayMain(void)
 				uint8_t displayCh = gEeprom.ScreenChannel[vfo_num];
 				if (!RADIO_CheckValidChannel(displayCh, false, 0)) {
 					displayCh = gEeprom.MrChannel[vfo_num];
-					if (gScreenChannelGuardTrips < 0xFFFF) {
-						if (gScreenChannelGuardTrips == 0) {
-							static const char msg[] = "GUARD: ScreenChannel invalid, falling back to MrChannel\r\n";
-							UART_LogSend(msg, sizeof(msg) - 1);
-						}
-						gScreenChannelGuardTrips++;
 					}
-				}
 
 				switch (gEeprom.CHANNEL_DISPLAY_MODE)
 				{
@@ -779,43 +763,9 @@ void UI_DisplayMain(void)
 		else
 		if (rx || gCurrentFunction == FUNCTION_FOREGROUND || gCurrentFunction == FUNCTION_POWER_SAVE)
 		{
-			#if 1
-				if (gSetting_live_DTMF_decoder && gDTMF_RX_live[0] != 0)
-				{	// show live DTMF decode
-					const unsigned int len = strlen(gDTMF_RX_live);
-					const unsigned int idx = (len > (17 - 5)) ? len - (17 - 5) : 0;  // limit to last 'n' chars
-
-					if (gScreenToDisplay != DISPLAY_MAIN
-#ifdef ENABLE_DTMF_CALLING
-						|| gDTMF_CallState != DTMF_CALL_STATE_NONE
-#endif
-						)
-						return;
-
-					center_line = CENTER_LINE_DTMF_DEC;
-
-					sprintf(String, "DTMF %s", gDTMF_RX_live + idx);
-					UI_PrintStringSmallNormal(String, 2, 0, 3);
-				}
-			#else
-				if (gSetting_live_DTMF_decoder && gDTMF_RX_index > 0)
-				{	// show live DTMF decode
-					const unsigned int len = gDTMF_RX_index;
-					const unsigned int idx = (len > (17 - 5)) ? len - (17 - 5) : 0;  // limit to last 'n' chars
-
-					if (gScreenToDisplay != DISPLAY_MAIN ||
-						gDTMF_CallState != DTMF_CALL_STATE_NONE)
-						return;
-
-					center_line = CENTER_LINE_DTMF_DEC;
-
-					sprintf(String, "DTMF %s", gDTMF_RX_live + idx);
-					UI_PrintStringSmallNormal(String, 2, 0, 3);
-				}
-			#endif
-
+			// VUURWERK: G113 dead live DTMF decode display removed (the buffer never fills)
 #ifdef ENABLE_SHOW_CHARGE_LEVEL
-			else if (gChargingWithTypeC)
+			if (gChargingWithTypeC)
 			{	// charging .. show the battery state
 				if (gScreenToDisplay != DISPLAY_MAIN
 #ifdef ENABLE_DTMF_CALLING
@@ -845,8 +795,12 @@ void UI_DisplayMain(void)
 		ctx[0] = '\0';
 
 		if (gCurrentFunction == FUNCTION_TRANSMIT) {
-			const uint16_t elapsed = gEeprom.TX_TIMEOUT_TIMER ?
-				(gEeprom.TX_TIMEOUT_TIMER * 120 - gTxTimerCountdown_500ms) : 0;
+			// VUURWERK v1.5.1 (F8): derive elapsed time from the same total RADIO_PrepareTX
+			// loads (30 s, 1..9 min, 15 min). The old index * 120 underflowed at the
+			// 15 min setting and showed "TX 541:08".
+			const uint8_t  tot     = gEeprom.TX_TIMEOUT_TIMER;
+			const uint16_t total   = (tot == 0) ? 60 : (tot < 10) ? (uint16_t)(120 * tot) : 1800;
+			const uint16_t elapsed = (total > gTxTimerCountdown_500ms) ? (total - gTxTimerCountdown_500ms) : 0;
 			const uint16_t secs = elapsed / 2;
 			// VUURWERK v1.3.0 (S5): read the transmitting VFO, not gRxVfo --
 			// under crossband the RX VFO is the opposite one and the TX
@@ -859,8 +813,8 @@ void UI_DisplayMain(void)
 			uint8_t s_level;
 			const int16_t rssi_dbm = RX_Signal_dBm(&s_level);   // same figure as the centre bar
 			SignalQuality_t q = SIGNAL_QUALITY_Get();
-			char sc = SIGNAL_CLASSIFIER_GetSymbol(gEeprom.RX_VFO);
-			sprintf(ctx, "RX S%d %ddBm Q:%d %c", s_level, rssi_dbm, q, sc);
+			// VUURWERK: G050/G063 class glyph retired, "Q%d" so -100 dBm and weaker fit
+			sprintf(ctx, "RX S%d %ddBm Q%d", s_level, rssi_dbm, q);
 		} else if (gScanStateDir != SCAN_OFF || SCANNER_IsScanning()) {
 			// === VUURWERK v1.2.5 Scan rate telemetry ===
 			uint8_t cps = SCAN_RATE_ChannelsPerSec();

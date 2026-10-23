@@ -31,8 +31,10 @@ static uint16_t diag_env, diag_rms;
 static uint8_t  diag_gain;
 #endif
 
-// Configuration
-CompressorConfig_t gCompressorConfig = {
+// Configuration. v1.5.1: const. Nothing ever writes it, and as a
+// mutable global every division below (attack, release, ratio) was a
+// libgcc call on every 10 ms TX tick; folded, they are shifts and constants.
+static const CompressorConfig_t gCompressorConfig = {
 	.enabled     = true,
 	.threshold   = 18,    // 0-31 mic level where compression starts
 	.ratio_x10   = 30,    // 30 = 3:1 compression ratio

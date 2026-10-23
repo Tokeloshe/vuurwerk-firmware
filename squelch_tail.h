@@ -42,8 +42,8 @@ typedef struct {
 
 extern SquelchTail_t gSquelchTail;
 
-// Called every 10ms. Self-activates on RX with CTCSS (REG_0C tone-found
-// poll) or, v1.3.1 (T4), DCS (interrupt-maintained g_CDCSS_Lost); the DCS
+// Called every 10ms. Self-activates on RX with CTCSS (G054: interrupt-
+// maintained g_CTCSS_Lost) or, v1.3.1 (T4), DCS (g_CDCSS_Lost); the DCS
 // turn-off code (134.4Hz, ~180ms) drops the detector exactly like tone loss.
 void SQUELCH_TAIL_Process(void);
 

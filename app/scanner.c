@@ -305,6 +305,10 @@ void SCANNER_Start(void)
 		// (~-110 dBm) means the operator parked on dead air; abort
 		// with NO SIGNAL toast + 500 Hz double-beep so they can move
 		// to a real carrier instead of waiting out the 30 s timeout.
+		// VUURWERK: G081 set the frequency and the 0 indicator (UI reads
+		// it as NO SIGNAL) before the gate can return
+		gScanFrequency         = gRxVfo->pRX->Frequency;
+		gScanProgressIndicator = 0;
 		SYSTEM_DelayMs(50);
 		if (BK4819_GetRSSI() < 100) {
 			TOAST_Show("NO SIGNAL");
@@ -324,7 +328,6 @@ void SCANNER_Start(void)
 		// === end VUURWERK ===
 
 		gScanCssState  = SCAN_CSS_STATE_SCANNING;
-		gScanFrequency = gRxVfo->pRX->Frequency;
 
 		BK4819_PickRXFilterPathBasedOnFrequency(gScanFrequency);
 		BK4819_SetScanFrequency(gScanFrequency);
@@ -350,15 +353,13 @@ void SCANNER_Start(void)
 #endif
 	g_SquelchLost          = false;
 	gScannerSaveState      = SCAN_SAVE_NO_PROMPT;
-	gScanProgressIndicator = 0;
 }
 
 void SCANNER_Stop(void)
 {
 	if(SCANNER_IsScanning()) {
-		gEeprom.CROSS_BAND_RX_TX = gBackup_CROSS_BAND_RX_TX;
-		gVfoConfigureMode        = VFO_CONFIGURE_RELOAD;
-		gFlagResetVfos           = true;
+		if (!gCssBackgroundScan)   // VUURWERK: G076 only F+STAR takes the crossband backup
+			gEeprom.CROSS_BAND_RX_TX = gBackup_CROSS_BAND_RX_TX;
 		gUpdateStatus            = true;
 		gCssBackgroundScan 			 = false;
 		gScanUseCssResult = false;
@@ -366,6 +367,14 @@ void SCANNER_Stop(void)
 		gAnotherVoiceID          = VOICE_ID_CANCEL;
 #endif
 		BK4819_StopScan();
+
+		// VUURWERK: G032 undo SCANNER_Start's RADIO_InitInfo and re-arm the
+		// receiver now; the deferred reload only ran from a key event
+		RADIO_ConfigureChannel(0, VFO_CONFIGURE_RELOAD);
+		RADIO_ConfigureChannel(1, VFO_CONFIGURE_RELOAD);
+		RADIO_SelectVfos();
+		RADIO_SetupRegisters(true);
+		gUpdateDisplay = true;   // VUURWERK: G081 clear the menu SCAN animation
 	}
 }
 
@@ -414,6 +423,8 @@ void SCANNER_TimeSlice10ms(void)
 				gScanCssState      = SCAN_CSS_STATE_FOUND;
 				gScanUseCssResult  = true;
 				gUpdateStatus      = true;
+				// VUURWERK: G038 the lock cue sounds now, not at the next key
+				AUDIO_PlayBeep(BEEP_1KHZ_60MS_OPTIONAL);
 			}
 			// === end VUURWERK ===
 
@@ -424,9 +435,10 @@ void SCANNER_TimeSlice10ms(void)
 			}
 
 			if(gCssBackgroundScan) {
-				gCssBackgroundScan = false;
-				if(gScanUseCssResult)
-					MENU_CssScanFound();
+				// VUURWERK: G032 show the result, then restore through
+				// SCANNER_Stop (FOUND always carries gScanUseCssResult here)
+				MENU_CssScanFound();
+				SCANNER_Stop();
 			}
 			else
 				GUI_SelectNextDisplay(DISPLAY_SCANNER);
@@ -435,7 +447,10 @@ void SCANNER_TimeSlice10ms(void)
 			break;
 		}
 		default:
-			gCssBackgroundScan = false;
+			// VUURWERK: G032 a menu scan that failed (NO SIGNAL or the
+			// 30 s watchdog) restores the VFO and the receiver too
+			if (gCssBackgroundScan)
+				SCANNER_Stop();
 			break;
 	}
 

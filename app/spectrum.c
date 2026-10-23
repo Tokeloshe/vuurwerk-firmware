@@ -24,9 +24,12 @@
 #endif
 
 #include "driver/backlight.h"
+#include "driver/eeprom.h"
+#include "flashlight_watchdog.h"   // VUURWERK: G086
 #include "frequencies.h"
 #include "ui/helper.h"
 #include "ui/main.h"
+#include "ui/menu.h"      // v1.5.1 (F1): gSubMenu_BACKLIGHT
 
 struct FrequencyBandInfo {
   uint32_t lower;
@@ -50,7 +53,6 @@ bool redrawScreen = false;
 bool newScanStart = true;
 bool preventKeypress = true;
 bool audioState = true;
-bool lockAGC = false;
 
 State currentState = SPECTRUM, previousState = SPECTRUM;
 
@@ -67,11 +69,13 @@ const char *bwOptions[] = {"  25k", "12.5k", "6.25k"};
 const uint8_t modulationTypeTuneSteps[] = {100, 50, 10};
 const uint8_t modTypeReg47Values[] = {1, 7, 5};
 
+#define SPECTRUM_TRIGGER_DEFAULT 150   // v1.5.1 (F6): shared by the initializer and PatrolStart
+
 SpectrumSettings settings = {.stepsCount = STEPS_64,
                              .scanStepIndex = S_STEP_25_0kHz,
                              .frequencyChangeStep = 80000,
                              .scanDelay = 3200,
-                             .rssiTriggerLevel = 150,
+                             .rssiTriggerLevel = SPECTRUM_TRIGGER_DEFAULT,
                              .backlightState = true,
                              .bw = BK4819_FILTER_BW_WIDE,
                              .listenBw = BK4819_FILTER_BW_WIDE,
@@ -97,12 +101,72 @@ static uint8_t voiceProb[128];
 #define VOX_BAD_RELEASE     2   // drop after N consecutive non-voice checks (~0.6s; rides 1 flutter)
 static uint8_t s_voxBad;        // consecutive non-voice checks while locked
 
+// ===================== VUURWERK v1.5.1 PATROL tuning ======================
+// Every empirical patrol number lives here and nowhere else. All of it is
+// bench-tunable. None of these numbers is ever shown to the operator; the
+// menu only ever says Low / Normal / High, Slow / Normal, Short / Normal /
+// Long.
+//
+// Sensitivity is a pair per setting: the voice-score threshold the sweep
+// gates on, and the RSSI trigger that decides which bins are candidates at
+// all. Under the trigger every candidate already earns the scorer's signal
+// points, so the only scores that occur are 95 or 80 (quiet demod), 85 or
+// 70 (moderate), 55 (noisy) and 35 (rejected by the hold rule anyway). Low
+// raises the score bar above the noisy tier; High cannot usefully lower it,
+// so High reaches deeper instead by lowering the trigger about 7 dB. Normal
+// is the literal hold-to-sweep has always used, both numbers.
+static const uint8_t  patrolSensThreshold[3] = { 60, 50, 50 };                     // Low, Normal, High
+static const uint16_t patrolSensTrigger[3]   = { SPECTRUM_TRIGGER_DEFAULT,
+                                                 SPECTRUM_TRIGGER_DEFAULT, 136 };   // Low, Normal, High
+// Speed: Slow adds a settle pause between tuning and measuring each bin
+// while patrol is actively sweeping (not camped on a hit). Normal adds
+// nothing, the native rate. VUURWERK: G007 the pause used to follow the read.
+#define PATROL_SLOW_SETTLE_US  1000
+// Dwell: the guaranteed listen after a hit before the first recheck. Normal
+// reproduces the stock 1000 ms exactly. Read in ToggleRX below.
+static const uint16_t patrolHoldMs[3]        = { 500, 1000, 2000 };                // Short, Normal, Long
+// Resume: consecutive non-voice rechecks before a camp is released. Normal
+// reproduces VOX_BAD_RELEASE exactly.
+static const uint8_t  patrolResumeBad[3]     = { 1, VOX_BAD_RELEASE, 4 };          // Short, Normal, Long
+// Dwell cap: hard ceiling on one automatic camp, whatever the settings say.
+// This is the mandatory unattended safeguard: one carrier that fools the
+// scorer must never end the patrol.
+#define PATROL_DWELL_CAP_S     60
+// A capped frequency is skipped for this many half-seconds of sweeping
+// (2 minutes), then it may be visited again: a real conversation that ran
+// long comes back, a birdie costs one dwell every few minutes.
+#define PATROL_CAP_SKIP_HALF_S 240   // VUURWERK: G003 time, not laps; fits the uint8 count
+#define PATROL_CAP_SLOTS       8
+#define PATROL_CAP_MENU        0xFF   // VUURWERK: G005 a MENU skip, never ages during the run
+// Experimental carrier rejection. OFF by default, not a feature, not
+// documented, not promised: during a patrol hold, read the glitch indicator
+// on every recheck; an unmodulated carrier holds it dead still while voice
+// keeps it moving. Set to 1 to bench it.
+#define PATROL_CARRIER_STILL   0
+#define PATROL_STILL_GLITCH    2
+#define PATROL_STILL_CHECKS    10                                                  // consecutive still rechecks, about 3 s at 300 ms
+#if PATROL_CARRIER_STILL
+static uint8_t s_stillChecks;   // consecutive dead-still rechecks while camped
+#endif
+// ================== end VUURWERK v1.5.1 PATROL tuning ======================
+
 // v1.3.6: VOX LOCK -- park on the voice you're hearing (PTT), release with UP/DOWN.
 static bool s_voxLock = false;     // pinned to the current voice; arms exit carry-over + LOCKED toast
 
 // v1.2.6 spectrum visual polish state (v1.2.7 dropped the SIDE2
 // release/long-press state machine; SIDE2 now mirrors SIDE1).
 static uint8_t s_mode_toast_renders = 0;
+static const char *specModeNames[] = {"NORM", "PEAK", "VOX "};
+static const char *s_toastText = "";   // v1.5.1: what the brief toast shows
+
+// v1.5.1 PATROL: battery percent, captured from DrawStatus()'s existing
+// calibrated calculation (see DrawStatus below) so the low-battery
+// safeguard reads the exact same number the status bar shows, instead of
+// duplicating the calibration formula or trusting gBatteryDisplayLevel --
+// which the main scheduler's 10ms battery task refreshes, and that task
+// does not run while spectrum.c holds the CPU in its own loop.
+static uint8_t s_lastBatteryPercent = 100;
+static uint8_t PatrolVoiceThreshold(void);   // defined with the patrol block below
 
 int vfo;
 uint8_t freqInputIndex = 0;
@@ -110,17 +174,7 @@ uint8_t freqInputDotIndex = 0;
 KEY_Code_t freqInputArr[10];
 char freqInputString[11];
 
-uint8_t menuState = 0;
 uint16_t listenT = 0;
-
-RegisterSpec registerSpecs[] = {
-    {},
-    {"LNAs", BK4819_REG_13, 8, 0b11, 1},
-    {"LNA", BK4819_REG_13, 5, 0b111, 1},
-    {"PGA", BK4819_REG_13, 0, 0b111, 1},
-    {"IF", BK4819_REG_3D, 0, 0xFFFF, 0x2aaa},
-    // {"MIX", 0x13, 3, 0b11, 1}, // TODO: hidden
-};
 
 uint16_t statuslineUpdateTimer = 0;
 
@@ -159,37 +213,6 @@ static uint8_t ComputeVoiceProb(uint16_t rssi, uint8_t noise)
   return (s > 95) ? 95 : (uint8_t)s;
 }
 
-static uint16_t GetRegMenuValue(uint8_t st) {
-  RegisterSpec s = registerSpecs[st];
-  return (BK4819_ReadRegister(s.num) >> s.offset) & s.mask;
-}
-
-void LockAGC()
-{
-  RADIO_SetupAGC(settings.modulationType==MODULATION_AM, lockAGC);
-  lockAGC = true;
-}
-
-static void SetRegMenuValue(uint8_t st, bool add) {
-  uint16_t v = GetRegMenuValue(st);
-  RegisterSpec s = registerSpecs[st];
-
-  if(s.num == BK4819_REG_13)
-    LockAGC();
-
-  uint16_t reg = BK4819_ReadRegister(s.num);
-  if (add && v <= s.mask - s.inc) {
-    v += s.inc;
-  } else if (!add && v >= 0 + s.inc) {
-    v -= s.inc;
-  }
-  // TODO: use max value for bits count in max value, or reset by additional
-  // mask in spec
-  reg &= ~(s.mask << s.offset);
-  BK4819_WriteRegister(s.num, reg | (v << s.offset));
-  redrawScreen = true;
-}
-
 // GUI functions
 
 static void PutPixel(uint8_t x, uint8_t y, bool fill) {
@@ -219,6 +242,13 @@ KEY_Code_t GetKey() {
     btn = KEY_PTT;
   }
   return btn;
+}
+
+// VUURWERK: G023 wait until every keypad key is up (PTT is not a keypad key).
+// Entry: the key that launched us; exit: the terminal EXIT press.
+static void WaitKeysReleased(void) {
+  while (KEYBOARD_Poll() != KEY_INVALID)
+    SYSTEM_DelayMs(10);
 }
 
 static int clamp(int v, int min, int max) {
@@ -281,10 +311,13 @@ static void ToggleAFDAC(bool on) {
 }
 
 static void SetF(uint32_t f) {
+  // VUURWERK: G098 the LNA path only flips at 280 MHz: re-pick on a dirty cache or when
+  // f and fMeasure sit on opposite sides (the signs of x - 28000000 differ)
+  if (s_reg30_dirty || (int32_t)((f - 28000000) ^ (fMeasure - 28000000)) < 0)
+    BK4819_PickRXFilterPathBasedOnFrequency(f);
   fMeasure = f;
 
   BK4819_SetFrequency(fMeasure);
-  BK4819_PickRXFilterPathBasedOnFrequency(fMeasure);
   // VUURWERK v1.3.1 (T2): cached REG_30 pulse (see s_reg30_cache above)
   if (s_reg30_dirty) {
     s_reg30_cache = BK4819_ReadRegister(BK4819_REG_30);
@@ -309,11 +342,7 @@ uint16_t GetScanStep() { return scanStepValues[settings.scanStepIndex]; }
 
 uint16_t GetStepsCount()
 {
-#ifdef ENABLE_SCAN_RANGES
-  if(gScanRangeStart) {
-    return (gScanRangeStop - gScanRangeStart) / GetScanStep();
-  }
-#endif
+  // VUURWERK: G101 dead scan-range branch removed, so this never exceeds 128
   return 128 >> settings.stepsCount;
 }
 
@@ -322,7 +351,7 @@ uint32_t GetFStart() {
   return IsCenterMode() ? currentFreq - (GetBW() >> 1) : currentFreq;
 }
 
-uint32_t GetFEnd() { return currentFreq + GetBW(); }
+uint32_t GetFEnd() { return GetFStart() + GetBW(); }   // VUURWERK: G108 right edge in centre mode too
 
 static void TuneToPeak() {
   scanInfo.f = peak.f;
@@ -331,51 +360,10 @@ static void TuneToPeak() {
   SetF(scanInfo.f);
 }
 
+// VUURWERK: G001 EXIT and the PATROL low-battery stop only end the session.
+// The whole hand-off (carry-over, restore, resync) runs once at the tail of
+// APP_RunSpectrum, after the key release wait. Safe to call inside Tick().
 static void DeInitSpectrum() {
-  // v1.4.2 VOX-lock carry-over via a DIRECT VFO write -- NO gRequestSaveChannel. Every prior version
-  // (v1.3.6-v1.4.0) persisted via gRequestSaveChannel, which made ProcessKey's exit tail run
-  // RADIO_ConfigureChannel + RADIO_SelectVfos + RADIO_SetupRegisters -- and THAT reconfigure (NOT
-  // crossband, NOT dual-watch -- both confirmed OFF) flipped the active VFO and deafened the radio.
-  // A normal (no-lock) spectrum exit never runs that tail and works. So we mirror the normal exit
-  // exactly: write peak.f into the active VFO's RAM + persist it straight to EEPROM (no flag, no
-  // reconfigure), then the SAME SetF + RestoreRegisters the normal exit uses. Freq mode + same band
-  // only; SETTINGS_SaveChannel for a FREQ channel writes the VFO EEPROM region, NEVER a memory chan.
-  if (s_voxLock
-      && IS_FREQ_CHANNEL(gTxVfo->CHANNEL_SAVE)
-      && !gTxVfo->FrequencyReverse   // v1.4.5: reverse swaps pRX/pTX -- a carry would mistune by the offset
-      && peak.f >= frequencyBandTable[gTxVfo->Band].lower
-      && peak.f <= frequencyBandTable[gTxVfo->Band].upper) {
-    // v1.4.5: step-round before persisting -- the reload rounds anyway (radio.c:348-349), so an
-    // unrounded save would silently shift by up to half a step at the next reconfigure/reboot.
-    gTxVfo->freq_config_RX.Frequency = FREQUENCY_RoundToStep(peak.f, gTxVfo->StepFrequency);
-    RADIO_ApplyOffset(gTxVfo);      // derive freq_config_TX now (simplex: TX == RX) for PTT-to-answer
-    SETTINGS_SaveChannel(gTxVfo->CHANNEL_SAVE, gEeprom.TX_VFO, gTxVfo, 1);   // persist, no reconfigure
-  }
-
-  RestoreRegisters();
-
-  // v1.4.3: deterministic exit -- ALWAYS come back on the operator's own VFO. With dual watch
-  // parked on the other side at entry (stale gRxVfoIsActive/RX_VFO ride through the modal session),
-  // or its countdown drained-and-latched during the sweep, the first thing the main loop showed
-  // after exit was the OTHER VFO ("flips me to the B side"). Re-sync via the blessed selector,
-  // drop the stale receive flag, and grant dual watch a fresh full dwell. v1.4.5 fixes two review
-  // findings here: the countdown is reloaded BEFORE the flag is cleared (the 10ms ISR could fire
-  // between the stores and re-latch a flip -- every other site orders it this way), and the exit
-  // retune happens AFTER RADIO_SelectVfos and tunes gRxVfo (with crossband ON, RX rides the other
-  // VFO -- tuning gTxVfo left the crossband watch frequency deaf until the next reconfigure).
-  RADIO_SelectVfos();
-  gRxVfoIsActive           = false;
-  gDualWatchCountdown_10ms = dual_watch_count_after_1_10ms;
-  gScheduleDualWatch       = false;
-
-  // VUURWERK v1.3.0 (F6): retune to the VFO frequency on exit -- stock egzumer leaves the chip at
-  // the sweep's left edge (deaf on the displayed frequency) until some later RADIO_SetupRegisters.
-  // v1.5.0: mark the REG_30 cache dirty first -- SetF pulses REG_30 from s_reg30_cache,
-  // which still holds the scan-time value (AF-DAC bit off) and would re-clobber the register
-  // RestoreRegisters just restored. Dirty -> SetF re-reads the restored value and pulses that.
-  s_reg30_dirty = true;
-  SetF(gRxVfo->pRX->Frequency);
-
   isInitialized = false;
 }
 
@@ -413,7 +401,7 @@ static void ToggleAudio(bool on) {
 static void ToggleRX(bool on) {
   isListening = on;
 
-  RADIO_SetupAGC(on, lockAGC);
+  RADIO_SetupAGC(on, false);
   BK4819_ToggleGpioOut(BK4819_GPIO6_PIN2_GREEN, on);
 
   ToggleAudio(on);
@@ -421,8 +409,11 @@ static void ToggleRX(bool on) {
   ToggleAFBit(on);
 
   if (on) {
-    listenT = 1000;
+    listenT = patrolActive ? patrolHoldMs[patrolSettings.dwell] : 1000;   // v1.5.1 PATROL Dwell
     s_voxBad = 0;   // v1.3.3: fresh VOX hold-rule counter per lock
+#if PATROL_CARRIER_STILL
+    s_stillChecks = 0;
+#endif
     BK4819_WriteRegister(0x43, listenBWRegValues[settings.listenBw]);
   } else {
     BK4819_WriteRegister(0x43, GetBWRegValueForScan());
@@ -464,12 +455,11 @@ static void LockVoiceBin(uint8_t vi) {
   TuneToPeak();
 }
 
-// v1.3.3: the VOX voice arrays (voiceProb/noiseHistory, 128 entries) are only
-// coherent when each display bin maps 1:1 to a step. In a compressed scan-range
-// span (>128 steps) peak.i is a raw step index that can exceed 127, so the
-// voice gate/store/hop must be skipped there to avoid out-of-bounds access.
+// v1.3.3: the VOX voice arrays (voiceProb/noiseHistory, 128 entries) map 1:1
+// to the display bins. VUURWERK: G101 every span is <= 128 steps now, so the
+// voice gate/store/hop only needs the VOX mode test.
 static bool VoiceModeActive(void) {
-  return spectrum_mode == 2 && scanInfo.measurementsCount <= 128;
+  return spectrum_mode == 2;
 }
 
 static void ResetBlacklist() {
@@ -531,15 +521,7 @@ static void UpdatePeakInfo() {
 
 static void SetRssiHistory(uint16_t idx, uint16_t rssi)
 {
-#ifdef ENABLE_SCAN_RANGES
-  if(scanInfo.measurementsCount > 128) {
-    uint8_t i = (uint32_t)ARRAY_SIZE(rssiHistory) * 1000 / scanInfo.measurementsCount * idx / 1000;
-    if(rssiHistory[i] < rssi || isListening)
-      rssiHistory[i] = rssi;
-    rssiHistory[(i+1)%128] = 0;
-    return;
-  }
-#endif
+  // VUURWERK: G101 dead >128-step compression removed
   rssiHistory[idx] = rssi;
 }
 
@@ -550,7 +532,7 @@ static void Measure()
 
   // Update spectrum mode buffers
   if (scanInfo.i < 128) {
-    uint8_t val = Rssi2PX(rssi, 0, 55);
+    uint8_t val = Rssi2PX(rssi, 0, DrawingEndY);   // VUURWERK: G018 same scale as the bars
     if (val > peak_hold[scanInfo.i])
       peak_hold[scanInfo.i] = val;
 
@@ -667,6 +649,9 @@ static void ToggleListeningBW() {
   } else {
     settings.listenBw++;
   }
+  // VUURWERK: G020 apply now; a VOX lock or STILL listen never re-runs ToggleRX
+  if (isListening)
+    BK4819_WriteRegister(0x43, listenBWRegValues[settings.listenBw]);
   redrawScreen = true;
 }
 
@@ -820,7 +805,7 @@ static void DrawSpectrum() {
       uint8_t bin = x >> settings.stepsCount;
       uint8_t vp = voiceProb[bin];
 
-      if (vp < 50) {
+      if (vp < PatrolVoiceThreshold()) {   // == 50 unless patrol is active (review V8)
         PutPixel(x, DrawingEndY, true);
         continue;
       }
@@ -854,6 +839,7 @@ static void DrawStatus() {
                      4 * 760 / gBatteryCalibration[3];
 
   unsigned perc = BATTERY_VoltsToPercent(voltage);
+  s_lastBatteryPercent = (uint8_t)perc;
 
   // sprintf(String, "%d %d", voltage, perc);
   // GUI_DisplaySmallest(String, 48, 1, true, true);
@@ -873,7 +859,7 @@ static void DrawStatus() {
 
 static void DrawF(uint32_t f) {
   sprintf(String, "%u.%05u", f / 100000, f % 100000);
-  UI_PrintStringSmallNormal(String, 8, 127, 0);
+  UI_PrintStringSmallNormal(String, 8, 119, 0);   // VUURWERK: G009 a 1 GHz reading ends at x 97, clear of the mode label
 
   sprintf(String, "%3s", gModulationStr[settings.modulationType]);
   GUI_DisplaySmallest(String, 116, 1, false, true);
@@ -953,7 +939,363 @@ static void DrawArrow(uint8_t x) {
   }
 }
 
+// ===================== VUURWERK v1.5.1 PATROL =============================
+// Latched, unattended version of the existing VOX voice-seeking sweep
+// (spectrum_mode == 2, "hold-to-sweep" elsewhere in this file). Patrol does
+// not replace or rewrite that sweep -- it extends it: while patrolActive,
+// a handful of the sweep's internal constants are read from patrolSettings
+// instead of their hardcoded defaults, and the sweep's own "give up,
+// rescan" moments additionally advance the window across the stored range
+// instead of re-sweeping the same window forever. When patrolActive is
+// false (always, for anyone who has never pressed KEY_0 in VOX mode), every
+// one of those read sites resolves to the exact literal hold-to-sweep has
+// always used -- see PatrolVoiceThreshold() and the resume-hysteresis read
+// in UpdateListening() below. Every tunable number is in the PATROL tuning
+// block near the top of this file.
+
+PatrolSettings patrolSettings;
+bool           patrolActive = false;
+
+static uint32_t patrolRangeLo, patrolRangeHi;   // window starts walk [lo, hi)
+static uint8_t  patrolDwellTicks;   // VUURWERK: G013 half-seconds camped, counted in Tick()
+static uint8_t  s_stepBeforePatrol = 0xFF;      // the view's own step, put back when patrol stops
+static uint16_t s_triggerBeforePatrol;          // the view's own RSSI trigger, put back when patrol stops
+
+#ifdef ENABLE_SCAN_RANGES
+// Capped frequencies are remembered by frequency, because the window-local
+// blacklist is index based and is reset on every window advance, and a
+// capped index would mean a different frequency in the next window. Scan()
+// checks this table directly (PatrolIsCapped below).
+static uint32_t patrolCapFreq[PATROL_CAP_SLOTS];
+static uint8_t  patrolCapLeft[PATROL_CAP_SLOTS];   // half-seconds still to skip; 0 = slot free
+
+// count is PATROL_CAP_SKIP_HALF_S for the dwell cap, or PATROL_CAP_MENU for
+// a MENU skip that lasts until patrol stops (VUURWERK: G005). The slot reused is
+// the one nearest expiry, so a MENU skip is the last to be overwritten.
+static void PatrolRememberCap(uint32_t f, uint8_t count) {
+  uint8_t i = 0;
+  for (uint8_t j = 1; j < PATROL_CAP_SLOTS; j++)
+    if (patrolCapLeft[j] < patrolCapLeft[i])
+      i = j;
+  patrolCapFreq[i] = f;
+  patrolCapLeft[i] = count;
+}
+
+// Called from Tick()'s 500 ms block unless an automatic camp is running:
+// half a second of sweeping (or PTT lock) is done (VUURWERK: G003, it used
+// to count window wraps).
+static void PatrolCapAge(void) {
+  for (uint8_t i = 0; i < PATROL_CAP_SLOTS; i++)
+    if (patrolCapLeft[i] && patrolCapLeft[i] != PATROL_CAP_MENU)   // VUURWERK: G005 never ages
+      patrolCapLeft[i]--;
+}
+
+// A bin is capped when it lies within one step of a remembered frequency
+// whose skip count is still running. Scan() consults this next to the
+// window-local blacklist, so a cap never has to be re-marked on a window
+// advance (the ring is only 15 deep; copying up to 24 cap entries into it
+// per advance used to wrap and drop caps it had just written). A strong
+// carrier leaks into the bins either side through the filter skirts and
+// they score as voice too, hence the one-step margin. Inert unless patrol
+// is latched.
+static bool PatrolIsCapped(uint32_t f) {
+  if (!patrolActive) return false;
+  const uint32_t step = scanInfo.scanStep;
+  for (uint8_t i = 0; i < PATROL_CAP_SLOTS; i++) {
+    const uint32_t c = patrolCapFreq[i];
+    if (patrolCapLeft[i] && f + step >= c && f <= c + step) {
+      rssiHistory[scanInfo.i] = 0;   // VUURWERK: G010 never keep another window's reading
+      return true;
+    }
+  }
+  return false;
+}
+
+// Blacklist the camped bin's neighbours in this window (see above).
+static void PatrolBlacklistNeighbours(void) {
+  for (int8_t k = -1; k <= 1; k += 2) {
+    const int16_t n = (int16_t)peak.i + k;
+    if (n < 0 || n >= (int16_t)scanInfo.measurementsCount) continue;
+    blacklistFreqs[blacklistFreqsIdx++ % ARRAY_SIZE(blacklistFreqs)] = (uint16_t)n;
+    SetRssiHistory((uint16_t)n, RSSI_MAX_VALUE);
+  }
+}
+#endif
+
+// Cap the bin patrol is camped on: remember it, blacklist it and its
+// neighbours for this window, release the camp. Shared by the dwell cap,
+// MENU while patrol is camped (VUURWERK: G005) and the carrier-still
+// experiment.
+static void PatrolCapCurrentBin(uint8_t count) {
+#ifdef ENABLE_SCAN_RANGES
+  PatrolRememberCap(peak.f, count);
+  PatrolBlacklistNeighbours();
+#endif
+  Blacklist();                // existing MENU-key mechanism, unmodified
+  patrolDwellTicks = 0;
+}
+
+// The voice-score threshold hold-to-sweep and patrol both gate on. Returns
+// the exact literal (50) hold-to-sweep has always used unless patrol is
+// active, in which case Sensitivity selects it. This is the only place that
+// literal is allowed to vary.
+static uint8_t PatrolVoiceThreshold(void) {
+  return patrolActive ? patrolSensThreshold[patrolSettings.sensitivity] : 50;
+}
+
+// EEPROM 0x0F48..0x0F4F: the 8-byte gap between the F_LOCK/misc block and the
+// MR channel names, unmapped by CHIRP, never written by any v1.5.0 build, and
+// outside every factory-reset window (patrol settings survive a reset).
+//   [0] bits 1:0 sensitivity, 3:2 speed, 5:4 dwell, 7:6 resume (3 = unset)
+//   [1] bits 3:0 step index captured with the range (0xF = follow the view),
+//       bits 7:4 modulation captured with the range (0xF = follow the view;
+//       VUURWERK: G095, v1.5.1 wrote 0xF here)
+//   [2..4] range start, [5..7] range stop: 24-bit little endian, 100 Hz
+//       units, 0xFFFFFF = unset
+// Anything unset or out of range decodes to the default that reproduces the
+// pre-patrol behaviour, so a radio upgraded from v1.5.0 behaves exactly as it
+// did before the upgrade until a setting is deliberately changed.
+#define PATROL_EEPROM_ADDR 0x0F48
+
+static uint32_t PatrolUnpackFreq(const uint8_t *p) {
+  const uint32_t v = (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16);
+  const uint32_t f = v * 10u;
+  return (v == 0xFFFFFFu || f < F_MIN || f > F_MAX) ? 0 : f;
+}
+
+static void PatrolPackFreq(uint8_t *p, uint32_t f) {
+  const uint32_t v = f ? f / 10u : 0xFFFFFFu;
+  p[0] = (uint8_t)v;
+  p[1] = (uint8_t)(v >> 8);
+  p[2] = (uint8_t)(v >> 16);
+}
+
+// Called once from Main() at boot (v1.5.1 F2), so the menu never shows or
+// rewrites an unloaded RAM copy.
+void PatrolLoadSettings(void) {
+  uint8_t d[8];
+  EEPROM_ReadBuffer(PATROL_EEPROM_ADDR, d, sizeof(d));
+
+  patrolSettings.sensitivity = (d[0] >> 0) & 3;
+  patrolSettings.speed       = (d[0] >> 2) & 3;
+  patrolSettings.dwell       = (d[0] >> 4) & 3;
+  patrolSettings.resume      = (d[0] >> 6) & 3;
+  if (patrolSettings.sensitivity > 2) patrolSettings.sensitivity = 1;   // 3 = unwritten
+  if (patrolSettings.speed       > 1) patrolSettings.speed       = 1;   // 2 and 3 = unwritten or retired Fast
+  if (patrolSettings.dwell       > 2) patrolSettings.dwell       = 1;
+  if (patrolSettings.resume      > 2) patrolSettings.resume      = 1;
+
+  patrolSettings.step = d[1] & 0x0F;
+  if (patrolSettings.step > S_STEP_100_0kHz) patrolSettings.step = PATROL_STEP_VIEW;
+  patrolSettings.modulation = d[1] >> 4;   // VUURWERK: G095 checked where it is applied
+
+  patrolSettings.rangeStart = PatrolUnpackFreq(&d[2]);
+  patrolSettings.rangeStop  = PatrolUnpackFreq(&d[5]);
+}
+
+// Called by app/menu.c when a patrol setting is accepted and by the in-view
+// range keys. One 8-byte write; the driver skips it when nothing changed.
+void PatrolSaveSettings(void) {
+  uint8_t d[8];
+  d[0] = (uint8_t)((patrolSettings.sensitivity & 3)
+       | ((patrolSettings.speed  & 3) << 2)
+       | ((patrolSettings.dwell  & 3) << 4)
+       | ((patrolSettings.resume & 3) << 6));
+  d[1] = (uint8_t)((patrolSettings.modulation << 4) | (patrolSettings.step & 0x0F));   // VUURWERK: G095
+  PatrolPackFreq(&d[2], patrolSettings.rangeStart);
+  PatrolPackFreq(&d[5], patrolSettings.rangeStop);
+  EEPROM_WriteBuffer(PATROL_EEPROM_ADDR, d);
+}
+
+// In-view range setting (VOX mode, keys 2 and 8): the window on screen is
+// the ruler. Its left edge becomes the range start, its right edge the range
+// stop, and the step and modulation in force at that moment are captured
+// with it, so the range is always walked as it was defined. This is the only
+// place the range is set; it is stored in EEPROM and survives power cycles.
+__attribute__((noinline)) static void PatrolSetRangeEdge(bool stop) {
+  if (stop)
+    patrolSettings.rangeStop  = GetFStart() + GetBW();
+  else
+    patrolSettings.rangeStart = GetFStart();
+  patrolSettings.step       = settings.scanStepIndex;
+  patrolSettings.modulation = settings.modulationType;   // VUURWERK: G095
+  PatrolSaveSettings();
+  s_toastText = stop ? "SET HI" : "SET LO";
+  s_mode_toast_renders = 6;
+  redrawScreen = true;
+}
+
+static bool PatrolBatteryLow(void) {
+  return s_lastBatteryPercent <= 5;
+}
+
+static void PatrolAdvanceWindow(void) {
+  // Work in window-START terms, not currentFreq. In center mode (scan step
+  // under 2.5 kHz) GetFStart() sits half a span below currentFreq, so
+  // wrapping currentFreq itself back to patrolRangeLo shifted every later
+  // lap by half a span. Carry the center offset across the wrap. A top
+  // partial window is end-aligned on patrolRangeHi, so the whole range is
+  // swept and nothing past it is.
+  const uint32_t span     = GetBW();
+  const uint32_t off      = currentFreq - GetFStart();   // 0, or span/2 in center mode
+  uint32_t       newStart = GetFStart() + span;
+  if (newStart >= patrolRangeHi) {   // VUURWERK: G002 wrap only past HI
+    newStart = patrolRangeLo;   // wrap: a new lap begins
+  } else if (newStart + span > patrolRangeHi) {
+    newStart = patrolRangeHi - span;   // VUURWERK: G002 end-align the top partial window
+  }
+  currentFreq = newStart + off;
+  RelaunchScan();
+  ResetBlacklist();
+  // RelaunchScan sets preventKeypress, which Tick() honors by skipping
+  // HandleUserInput entirely. Hold-to-sweep clears it at the end of every
+  // sweep, but a quiet patrol advances the window at that exact moment and
+  // re-arms it before the next tick ever reads it, so on a quiet band the
+  // toggle key and EXIT were never polled at all. That debounce exists to
+  // pace the operator's OWN navigation; patrol blocks navigation keys
+  // anyway, so there is nothing for it to pace here.
+  preventKeypress = false;
+}
+
+// Stopping patrol must not force-release an active listen or lock: a
+// ToggleRX(false) here would cut audio on a live QSO and clear s_voxLock,
+// which the APP_RunSpectrum exit tail reads for the lock carry-over.
+// Patrol only ever changes its own state; whatever the radio was doing when
+// it stopped keeps doing it. The step change (if any) takes effect at the
+// next sweep, which is when every step change takes effect anyway.
+static void PatrolStop(void) {
+  if (!patrolActive) return;
+
+  if (s_stepBeforePatrol != 0xFF) {
+    settings.scanStepIndex = s_stepBeforePatrol;
+    s_stepBeforePatrol     = 0xFF;
+    ResetBlacklist();   // VUURWERK: G129 its indices were at patrol's step
+  }
+  settings.rssiTriggerLevel = s_triggerBeforePatrol;   // hold-to-sweep gets its trigger back
+  patrolActive = false;
+  BACKLIGHT_TurnOn();    // v1.5.1 (F1): the screen may have timed out during patrol
+  redrawScreen = true;   // the PTRL glyph lives in RenderSpectrum, not the status line
+}
+
+static void PatrolStart(void) {
+  if (patrolActive) return;   // no-op: already latched, never re-arm mid-run
+  // VUURWERK: G101 dead scan-range session guard removed
+
+  // Range and step: the stored range, walked at the step captured with it,
+  // or -- with nothing stored -- the window on screen at the view's own step.
+  // Either way the first window starts at the range start.
+  {
+    uint32_t   lo     = patrolSettings.rangeStart;
+    uint32_t   hi     = patrolSettings.rangeStop;
+    const bool stored = (lo != 0 && hi != 0 && lo < hi);
+
+    s_stepBeforePatrol = 0xFF;
+    if (stored && patrolSettings.step != PATROL_STEP_VIEW
+               && patrolSettings.step != settings.scanStepIndex) {
+      s_stepBeforePatrol     = settings.scanStepIndex;
+      settings.scanStepIndex = patrolSettings.step;
+    }
+    // VUURWERK: G095 walk the range in the modulation it was defined in. Not
+    // undone by PatrolStop (a held camp keeps its audio); the exit restores
+    // the VFO's own modulation.
+    if (stored && patrolSettings.modulation < MODULATION_UKNOWN)
+      RADIO_SetModulation(settings.modulationType = patrolSettings.modulation);
+
+    const uint32_t off = currentFreq - GetFStart();   // 0, or half a span in center mode
+    if (!stored) {
+      lo = GetFStart();
+      hi = lo + GetBW();
+    }
+    if (hi > F_MAX) hi = F_MAX;   // never wander past what the hardware covers
+    patrolRangeLo = lo;
+    patrolRangeHi = hi;
+    currentFreq   = lo + off;
+  }
+
+  // v1.5.1 (F6): Sensitivity owns the RSSI trigger for the whole run. A
+  // trigger lowered in an earlier session must not decide what an unattended
+  // run auto-listens to. Hold-to-sweep keeps its own value: it is parked here
+  // and put back by PatrolStop, exactly like the step.
+  s_triggerBeforePatrol     = settings.rssiTriggerLevel;
+  settings.rssiTriggerLevel = patrolSensTrigger[patrolSettings.sensitivity];
+
+  patrolDwellTicks = 0;
+#ifdef ENABLE_SCAN_RANGES
+  memset(patrolCapLeft, 0, sizeof(patrolCapLeft));   // per session, never carried over
+#endif
+
+  RelaunchScan();
+  ResetBlacklist();
+  preventKeypress = false;   // see PatrolAdvanceWindow
+
+  patrolActive = true;
+  redrawScreen = true;   // the PTRL glyph lives in RenderSpectrum, not the status line
+}
+
+// Called once per Tick() while patrol is latched. Handles the mandatory
+// unattended safeguards that have no equivalent in hold-to-sweep: the dwell
+// cap and the low-battery stop. The patrol-only backlight timeout lives in
+// Tick()'s 500 ms block.
+static void PatrolTick(void) {
+  if (!patrolActive) return;
+
+  if (PatrolBatteryLow()) {
+    // Merely stopping patrol here is useless: the modal spectrum loop keeps
+    // running in VOX (still the most power-hungry mode) and the main
+    // scheduler's battery task, which is what raises the low-battery
+    // warning, never runs while this loop holds the CPU. The only way
+    // "patrol stops and the normal warning shows" can be true is to LEAVE
+    // the spectrum: the same exit EXIT uses, after which the main loop takes
+    // over and warns as usual.
+    PatrolStop();
+    gLowBatteryConfirmed = false;   // VUURWERK: G012 bring the LOW BATTERY popup back
+    DeInitSpectrum();
+    return;
+  }
+
+  // A PTT lock is a deliberate operator decision and is exempt from the cap
+  // entirely: someone who locks onto a real QSO and walks away is never
+  // kicked off it. Only the automatic, unconfirmed camp is capped; Tick()'s
+  // 500 ms block counts it (VUURWERK: G013). No per-bin bookkeeping is
+  // needed: every path that changes the camped bin passes through
+  // ToggleRX(false) first, so isListening is false for at least one tick in
+  // between and the counter is reset here. MENU sets PATROL_CAP_MENU to
+  // cap the camp at once (VUURWERK: G005).
+  if (!isListening || s_voxLock)
+    patrolDwellTicks = 0;
+  else if (patrolDwellTicks >= PATROL_DWELL_CAP_S * 2)
+    PatrolCapCurrentBin(patrolDwellTicks == PATROL_CAP_MENU ? PATROL_CAP_MENU
+                                                            : PATROL_CAP_SKIP_HALF_S);
+}
+// ================== end VUURWERK v1.5.1 PATROL =============================
+
 static void OnKeyDown(uint8_t key) {
+  // v1.5.1 PATROL: patrol owns the radio while it runs. Every key that
+  // would change VFO/frequency/step/modulation state is inert while
+  // latched -- KEY_0 (the toggle, stop), MENU (blacklist; while camped it
+  // skips that frequency until patrol stops, VUURWERK: G005), PTT (voice
+  // lock, unmodified) and EXIT (stop patrol, end the session) are the
+  // only ones that still do anything. This is a single boolean check when
+  // patrol has never been used, so default behavior is unchanged.
+  if (patrolActive) {
+    // VUURWERK: G004 every key restarts the backlight timer, and the first
+    // one on a dark screen only wakes it (EXIT included, as on the main
+    // screen). With BackLt OFF the light never comes on and keys act.
+    const bool wasOn = BACKLIGHT_IsOn();
+    BACKLIGHT_TurnOn();
+    if (!wasOn && BACKLIGHT_IsOn())
+      return;
+    switch (key) {
+    case KEY_0:
+    case KEY_MENU:
+    case KEY_PTT:
+    case KEY_EXIT:
+      break;
+    default:
+      return;
+    }
+  }
+
   switch (key) {
   case KEY_3:
     UpdateDBMax(true);
@@ -968,14 +1310,17 @@ static void OnKeyDown(uint8_t key) {
     UpdateScanStep(false);
     break;
   case KEY_2:
+    if (spectrum_mode == 2) { PatrolSetRangeEdge(false); break; }   // v1.5.1 PATROL: range start = this window's left edge
     UpdateFreqChangeStep(true);
     break;
   case KEY_8:
+    if (spectrum_mode == 2) { PatrolSetRangeEdge(true); break; }    // v1.5.1 PATROL: range stop = this window's right edge
     UpdateFreqChangeStep(false);
     break;
   case KEY_UP:
   case KEY_DOWN:
     s_voxLock = false;               // v1.3.6: UP/DOWN releases the lock, then seeks/navigates
+    s_mode_toast_renders = 0;        // VUURWERK: G021 a released lock must not keep saying LOCKED
     if (VoiceModeActive()) {
       // v1.3.5: directional voice seek. UP walks to the next voice bin ABOVE
       // the cursor, DOWN below -- no wrap, so UP always raises the frequency.
@@ -1004,16 +1349,10 @@ static void OnKeyDown(uint8_t key) {
         break;   // hopped onto a voice -- key consumed
       // no voice that way -> fall through to band navigation (shared below)
     }
-#ifdef ENABLE_SCAN_RANGES
-    if(!gScanRangeStart)
-#endif
-      UpdateCurrentFreq(key == KEY_UP);
+    UpdateCurrentFreq(key == KEY_UP);   // VUURWERK: G101 dead scan-range guards removed here and below
     break;
   case KEY_SIDE1:
-#ifdef ENABLE_SCAN_RANGES
-    if (!gScanRangeStart)
-#endif
-      UpdateCurrentFreq(true);
+    UpdateCurrentFreq(true);
     break;
   case KEY_STAR:
     s_voxLock = false;               // v1.3.6: cycling the mode abandons a lock (toast shows MODE)
@@ -1021,6 +1360,7 @@ static void OnKeyDown(uint8_t key) {
     memset(peak_hold, 0, sizeof(peak_hold));
     memset(noiseHistory, 255, sizeof(noiseHistory));   // v1.3.5: reject value, not 0 --
     memset(voiceProb, 0, sizeof(voiceProb));           // un-measured bins must not score
+    s_toastText = specModeNames[spectrum_mode];
     s_mode_toast_renders = 6;                          // as voice (noise 0 -> +45)
     redrawScreen = true;
     break;
@@ -1028,48 +1368,51 @@ static void OnKeyDown(uint8_t key) {
     UpdateRssiTriggerLevel(false);
     break;
   case KEY_5:
-#ifdef ENABLE_SCAN_RANGES
-    if(!gScanRangeStart)
-#endif
-      FreqInput();
+    FreqInput();
     break;
   case KEY_0:
+    if (spectrum_mode == 2) {              // v1.5.1 PATROL: one key toggles; the PTRL glyph shows state
+      if (kbd.counter != 3)                // VUURWERK: G006 first fire only, never on auto-repeat
+        break;
+      if (patrolActive) PatrolStop(); else PatrolStart();
+      break;
+    }
     ToggleModulation();
     break;
   case KEY_6:
     ToggleListeningBW();
     break;
   case KEY_4:
-#ifdef ENABLE_SCAN_RANGES
-    if(!gScanRangeStart)
-#endif
-      ToggleStepsCount();
+    ToggleStepsCount();
     break;
   case KEY_SIDE2:
-#ifdef ENABLE_SCAN_RANGES
-    if (!gScanRangeStart)
-#endif
-      UpdateCurrentFreq(false);
+    UpdateCurrentFreq(false);
     break;
   case KEY_PTT:
     if (spectrum_mode == 2) {                  // v1.3.7/v1.4.5: whenever the display says VOX, PTT
-      if (VoiceModeActive() && isListening) {  // only ever LOCKS -- never the STILL editor (a >128-
-        s_voxLock = true;                      // step scan-range shows VOX but VoiceModeActive() is
-        s_mode_toast_renders = 6;              // false; PTT there now does nothing instead of
-      }                                        // surprising the operator with the register screen)
+      if (VoiceModeActive() && isListening) {  // only ever LOCKS -- never the STILL editor; with
+        s_voxLock = true;                      // nothing heard it does nothing
+        s_toastText = "LOCKED";
+        s_mode_toast_renders = 6;
+        redrawScreen = true;                   // VUURWERK: G021 show LOCKED now, not a sweep later
+      }
       break;
     }
     SetState(STILL);                           // NORM/PEAK keep the stock park-and-monitor
     TuneToPeak();
     break;
   case KEY_MENU:
+    if (patrolActive && isListening) {   // VUURWERK: G005 skip it until patrol stops; the
+      if (kbd.counter == 3) {            // window blacklist dies at the next advance. First
+        s_voxLock        = false;        // fire only: a held MENU must not skip a later camp
+        patrolDwellTicks = PATROL_CAP_MENU;   // PatrolTick caps it this same tick
+      }
+      break;
+    }
     Blacklist();
     break;
   case KEY_EXIT:
-    if (menuState) {
-      menuState = 0;
-      break;
-    }
+    PatrolStop();   // no-op unless patrol was running -- leaves no stale state
     DeInitSpectrum();
     break;
   default:
@@ -1126,17 +1469,9 @@ void OnKeyDownStill(KEY_Code_t key) {
     UpdateDBMax(false);
     break;
   case KEY_UP:
-    if (menuState) {
-      SetRegMenuValue(menuState, true);
-      break;
-    }
     UpdateCurrentFreqStill(true);
     break;
   case KEY_DOWN:
-    if (menuState) {
-      SetRegMenuValue(menuState, false);
-      break;
-    }
     UpdateCurrentFreqStill(false);
     break;
   case KEY_STAR:
@@ -1165,23 +1500,10 @@ void OnKeyDownStill(KEY_Code_t key) {
     /* BK4819_ToggleGpioOut(BK4819_GPIO6_PIN2_GREEN, false);
     BK4819_ToggleGpioOut(BK4819_GPIO5_PIN1_RED, true); */
     break;
-  case KEY_MENU:
-    if (menuState == ARRAY_SIZE(registerSpecs) - 1) {
-      menuState = 1;
-    } else {
-      menuState++;
-    }
-    redrawScreen = true;
-    break;
   case KEY_EXIT:
-    if (!menuState) {
-      SetState(SPECTRUM);
-      lockAGC = false;
-      monitorMode = false;
-      RelaunchScan();
-      break;
-    }
-    menuState = 0;
+    SetState(SPECTRUM);
+    monitorMode = false;
+    RelaunchScan();
     break;
   default:
     break;
@@ -1196,8 +1518,6 @@ static void RenderStatus() {
   ST7565_BlitStatusLine();
 }
 
-static const char *specModeNames[] = {"NORM", "PEAK", "VOX "};
-
 static void RenderSpectrum() {
   DrawTicks();
   DrawArrow(128u * peak.i / GetStepsCount());
@@ -1206,18 +1526,22 @@ static void RenderSpectrum() {
   DrawF(peak.f);
   DrawNums();
   // Show current spectrum mode
-  GUI_DisplaySmallest(specModeNames[spectrum_mode], 108, 1, false, true);
+  // VUURWERK: G009 x 100..114 keeps the 4-char label clear of DrawF's modulation
+  // (116..126, USB included) and of the frequency (ends by x 97)
+  GUI_DisplaySmallest(patrolActive ? "PTRL" : specModeNames[spectrum_mode], 100, 1, false, true);
   // v1.2.6: brief mode-change toast (~6 renders) on STAR press
   if (s_mode_toast_renders) {
     // v1.3.6: LOCKED banner while parked on a voice, else the mode-change confirmation.
     // Point straight at the rodata string -- no sprintf/buffer (reclaims flash for LOCK).
     memset(&gFrameBuffer[2][20], 0, 88);
     memset(&gFrameBuffer[3][20], 0, 88);
-    UI_PrintStringSmallNormal(s_voxLock ? "LOCKED" : specModeNames[spectrum_mode], 20, 107, 2);
+    UI_PrintStringSmallNormal(s_toastText, 20, 107, 2);
     s_mode_toast_renders--;
   }
 }
 
+// v1.5.1: the register editor that used to sit under the meter (LNAs / LNA /
+// PGA / IF, MENU to cycle) was removed to fund PATROL. The meter stays.
 static void RenderStill() {
   DrawF(fMeasure);
 
@@ -1252,25 +1576,6 @@ static void RenderStill() {
     gFrameBuffer[2][METER_PAD_LEFT + x] = 0b11111111;
   }
 
-  const uint8_t PAD_LEFT = 4;
-  const uint8_t CELL_WIDTH = 30;
-  uint8_t offset = PAD_LEFT;
-  uint8_t row = 4;
-
-  for (int i = 0, idx = 1; idx <= 4; ++i, ++idx) {
-    offset = PAD_LEFT + i * CELL_WIDTH;
-    if (menuState == idx) {
-      for (int j = 0; j < CELL_WIDTH; ++j) {
-        gFrameBuffer[row][j + offset] = 0xFF;
-        gFrameBuffer[row + 1][j + offset] = 0xFF;
-      }
-    }
-    GUI_DisplaySmallest(registerSpecs[idx].name, offset + 2, row * 8 + 2,
-                        false, menuState != idx);
-    sprintf(String, "%u", GetRegMenuValue(idx));
-    GUI_DisplaySmallest(String, offset + 2, (row + 1) * 8 + 1, false,
-                        menuState != idx);
-  }
 }
 
 static void Render() {
@@ -1305,7 +1610,9 @@ bool HandleUserInput() {
     kbd.counter = 0;
   }
 
-  if (kbd.counter == 3 || kbd.counter == 16) {
+  // VUURWERK: G022 EXIT never auto-repeats: a held EXIT that clears frequency
+  // entry or leaves STILL must not then quit the spectrum.
+  if (kbd.counter == 3 || (kbd.counter == 16 && kbd.current != KEY_EXIT)) {
     switch (currentState) {
     case SPECTRUM:
       OnKeyDown(kbd.current);
@@ -1332,9 +1639,12 @@ static void Scan() {
   if (rssiHistory[scanInfo.i] != RSSI_MAX_VALUE
 #ifdef ENABLE_SCAN_RANGES
   && !IsBlacklisted(scanInfo.i)
+  && !PatrolIsCapped(scanInfo.f)   // v1.5.1 PATROL: capped carriers stay skipped across windows
 #endif
   ) {
     SetF(scanInfo.f);
+    if (patrolActive && patrolSettings.speed == 0)   // v1.5.1 PATROL Speed Slow, VUURWERK: G007
+      SYSTICK_DelayUs(PATROL_SLOW_SETTLE_US);
     Measure();
     UpdateScanInfo();
   }
@@ -1369,7 +1679,7 @@ static void UpdateScan() {
   // VOIC mode: compute voice probability per bin after sweep completes
   if (spectrum_mode == 2) {
     uint16_t steps = GetStepsCount();
-    for (uint16_t i = 0; i < steps && i < 128; i++)
+    for (uint16_t i = 0; i < steps; i++)   // VUURWERK: G101 steps <= 128, clamp dropped
       voiceProb[i] = ComputeVoiceProb(rssiHistory[i], noiseHistory[i]);
   }
 
@@ -1381,14 +1691,13 @@ static void UpdateScan() {
     // v1.3.3: if the loudest bin isn't voice, seek the strongest voice bin in
     // the span (over trigger, real reading, not blacklisted) and lock it, so
     // one strong non-voice carrier no longer starves auto-listen. None -> just
-    // rescan. VoiceModeActive() gates the >128-step peak.i/voiceProb OOB.
-    if (VoiceModeActive() && !monitorMode && voiceProb[peak.i] < 50) {
-      uint16_t steps = GetStepsCount();
-      if (steps > 128) steps = 128;
+    // rescan. VoiceModeActive() limits this to VOX.
+    if (VoiceModeActive() && !monitorMode && voiceProb[peak.i] < PatrolVoiceThreshold()) {
+      uint16_t steps = GetStepsCount();   // VUURWERK: G101 <= 128, clamp dropped
       uint8_t  best  = 0xFF;
       uint16_t bestR = 0;
       for (uint8_t i = 0; i < steps; i++) {
-        if (voiceProb[i] >= 50 &&
+        if (voiceProb[i] >= PatrolVoiceThreshold() &&
             rssiHistory[i] != RSSI_MAX_VALUE &&
             rssiHistory[i] >= settings.rssiTriggerLevel &&
 #ifdef ENABLE_SCAN_RANGES
@@ -1403,6 +1712,7 @@ static void UpdateScan() {
         LockVoiceBin(best);
         return;
       }
+      if (patrolActive) PatrolAdvanceWindow();   // nothing found this window -- move on
       newScanStart = true;
       return;
     }
@@ -1411,6 +1721,7 @@ static void UpdateScan() {
     return;
   }
 
+  if (patrolActive) PatrolAdvanceWindow();   // quiet sweep -- move to the next window
   newScanStart = true;
 }
 
@@ -1456,6 +1767,19 @@ static void UpdateListening() {
   if (vox)
     noiseHistory[peak.i] = BK4819_ReadRegister(0x65) & 0xFF;
 
+#if PATROL_CARRIER_STILL
+  // Experimental, off by default (see the PATROL tuning block).
+  if (vox && patrolActive && !s_voxLock && currentState == SPECTRUM) {
+    if ((BK4819_ReadRegister(0x63) & 0xFF) <= PATROL_STILL_GLITCH) {
+      if (++s_stillChecks >= PATROL_STILL_CHECKS) {   // dead carrier: cap it now
+        PatrolCapCurrentBin(PATROL_CAP_SKIP_HALF_S);
+        return;
+      }
+    } else
+      s_stillChecks = 0;
+  }
+#endif
+
   // v1.3.3 VOX hold rule: the noise gate is the hold authority, independent of
   // the RSSI trigger, so a weak-but-readable hopped voice is not dropped for
   // sitting below the sweep trigger. Hold while voice-like; drop only after 2
@@ -1474,7 +1798,10 @@ static void UpdateListening() {
       listenT = VOX_RECHECK_MS;
       return;
     }
-    if (++s_voxBad < VOX_BAD_RELEASE) {
+    // v1.5.1 PATROL Resume: patrol's Resume setting substitutes for the
+    // fixed VOX_BAD_RELEASE count; Normal reproduces it exactly, so
+    // hold-to-sweep (patrolActive always false) is byte-identical here.
+    if (++s_voxBad < (patrolActive ? patrolResumeBad[patrolSettings.resume] : VOX_BAD_RELEASE)) {
       listenT = VOX_RECHECK_MS;
       return;
     }
@@ -1490,41 +1817,55 @@ static void UpdateListening() {
 }
 
 static void Tick() {
-#ifdef ENABLE_AM_FIX
   if (gNextTimeslice) {
     gNextTimeslice = false;
-    if(settings.modulationType == MODULATION_AM && !lockAGC) {
+#ifdef ENABLE_AM_FIX
+    if(settings.modulationType == MODULATION_AM) {
       AM_fix_10ms(vfo); //allow AM_Fix to apply its AGC action
     }
-  }
 #endif
+#ifdef ENABLE_FLASHLIGHT
+    FLASHLIGHT_WATCHDOG_Tick();   // VUURWERK: G086 the main 10 ms slice never runs in here
+#endif
+  }
 
-#ifdef ENABLE_SCAN_RANGES
   if (gNextTimeslice_500ms) {
     gNextTimeslice_500ms = false;
 
-    // if a lot of steps then it takes long time
-    // we don't want to wait for whole scan
-    // listening has it's own timer
-    if(GetStepsCount()>128 && !isListening) {
-      UpdatePeakInfo();
-      if (IsPeakOverLevel()) {
-        ToggleRX(true);
-        TuneToPeak();
-        return;
-      }
-      redrawScreen = true;
-      preventKeypress = false;
-    }
-  }
+    // v1.5.1 (F1): patrol-only backlight timeout. The main scheduler's 500 ms
+    // slice, which normally runs this countdown, never executes while this
+    // loop owns the CPU. Hold-to-sweep keeps the screen lit as before.
+    if (patrolActive && gBacklightCountdown_500ms > 0
+        && --gBacklightCountdown_500ms == 0
+        && gEeprom.BACKLIGHT_TIME < (ARRAY_SIZE(gSubMenu_BACKLIGHT) - 1))
+      BACKLIGHT_TurnOff();
+
+    // v1.5.1 (F10): the radio is in use, so keep the battery-save countdown
+    // from expiring underneath us. Without this the 10 ms ISR runs it out and
+    // the radio drops into power save the instant the spectrum is left.
+    gBatterySaveCountdown_10ms = battery_save_count_10ms;
+
+    // VUURWERK: G013 the dwell cap counts wall-clock camp time, so a held
+    // key no longer stretches it; G003 cap skips age while sweeping or
+    // PTT-locked. Both are inert unless patrol runs (PatrolStart resets them).
+    if (isListening && !s_voxLock)
+      patrolDwellTicks++;
+#ifdef ENABLE_SCAN_RANGES
+    else
+      PatrolCapAge();
 #endif
+    // VUURWERK: G101 dead >128-step early-peak block removed
+  }
 
   if (!preventKeypress) {
     HandleUserInput();
-    if (!isInitialized)   // v1.5.0: EXIT ran DeInitSpectrum inside HandleUserInput --
-      return;             // one more Scan() step here would retune the chip to the sweep
-  }                       // position and rewrite REG_30 from the stale cache with the AF-DAC
-                          // bit off, clobbering the exit retune (deaf-until-next-reconfigure)
+    if (!isInitialized)   // v1.5.0: EXIT ran DeInitSpectrum inside HandleUserInput, the
+      return;             // session is over: no further sweep step (the restore and resync
+  }                       // run after the loop, in APP_RunSpectrum and the ProcessKey tail)
+  PatrolTick();   // no-op unless patrol is latched -- dwell cap + low-battery stop
+  if (!isInitialized)   // low battery just ran DeInitSpectrum -- same rule as the
+    return;             // EXIT case above
+
   if (newScanStart) {
     InitScan();
     newScanStart = false;
@@ -1550,24 +1891,19 @@ static void Tick() {
 }
 
 void APP_RunSpectrum() {
+  if (gEeprom.KEY_LOCK) {   // VUURWERK: G127 a side key or M Long must not bypass the keypad lock
+    gKeypadLocked = 4;      // the stock "unlock" prompt, 2 seconds
+    gBeepToPlay   = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
+    return;
+  }
+  WaitKeysReleased();   // VUURWERK: G023 a long-press launch key must not act in here
   // TX here coz it always? set to active VFO
   vfo = gEeprom.TX_VFO;
   // set the current frequency in the middle of the display
-#ifdef ENABLE_SCAN_RANGES
-  if(gScanRangeStart) {
-    currentFreq = initialFreq = gScanRangeStart;
-    for(uint8_t i = 0; i < ARRAY_SIZE(scanStepValues); i++) {
-      if(scanStepValues[i] >= gTxVfo->StepFrequency) {
-        settings.scanStepIndex = i;
-        break;
-      }
-    }
-    settings.stepsCount = STEPS_128;
-  }
-  else
-#endif
-    currentFreq = initialFreq = gTxVfo->pRX->Frequency -
-                                ((GetStepsCount() / 2) * GetScanStep());
+  // VUURWERK: G101 dead scan-range entry block removed
+  // VUURWERK: G108 centre mode (steps under 2.5k) centres on currentFreq itself
+  currentFreq = initialFreq = gTxVfo->pRX->Frequency -
+                              (IsCenterMode() ? 0 : (GetStepsCount() / 2) * GetScanStep());
 
   BackupRegisters();
 
@@ -1591,9 +1927,13 @@ void APP_RunSpectrum() {
   memset(noiseHistory, 255, sizeof(noiseHistory));   // v1.3.5: reject value (see STAR handler)
   memset(voiceProb, 0, sizeof(voiceProb));
   s_voxLock = false;             // v1.3.6: no stale lock across sessions
+  s_mode_toast_renders = 0;      // VUURWERK: G014 no toast replayed from the last session
+  kbd.counter = 0;               // VUURWERK: G022 no key repeat count across sessions
   spectrum_mode = 0;
   sweep_count = 0;
   s_reg30_dirty = true;  // VUURWERK v1.3.1 (T2): fresh cache every spectrum entry
+
+  patrolActive = false;   // v1.5.1 PATROL: never latched across sessions
 
   isInitialized = true;
 
@@ -1605,6 +1945,43 @@ void APP_RunSpectrum() {
   // function returns, the main loop re-latches it ~100ms later as a FRESH main-screen press --
   // and EXIT there is the VFO A/B toggle ("exiting flips me to the other side", operator-timing
   // dependent, immune to the v1.4.3 exit determinism because it's a real post-exit keypress).
-  while (KEYBOARD_Poll() != KEY_INVALID)
-    SYSTEM_DelayMs(10);
+  WaitKeysReleased();
+  // VUURWERK: G001 a PTT still held at exit is marked handled, so the main
+  // loop never keys up on it; TX needs a release and a fresh press.
+  if (!GPIO_CheckBit(&GPIOC->DATA, GPIOC_PIN_PTT))
+    gPttIsPressed = true;
+
+  // v1.4.2 VOX-lock carry-over: write the sweep's peak.f into the active VFO and persist it.
+  // Freq mode + same band only; SETTINGS_SaveChannel for a FREQ channel writes the VFO EEPROM
+  // region, NEVER a memory channel.
+  if (s_voxLock
+      && IS_FREQ_CHANNEL(gTxVfo->CHANNEL_SAVE)
+      && !gTxVfo->FrequencyReverse   // v1.4.5: reverse swaps pRX/pTX -- a carry would mistune by the offset
+      && peak.f >= frequencyBandTable[gTxVfo->Band].lower
+      && peak.f <= frequencyBandTable[gTxVfo->Band].upper) {
+    // v1.4.5: step-round before persisting -- the reload rounds anyway (radio.c:348-349), so an
+    // unrounded save would silently shift by up to half a step at the next reconfigure/reboot.
+    gTxVfo->freq_config_RX.Frequency = FREQUENCY_RoundToStep(peak.f, gTxVfo->StepFrequency);
+    RADIO_ApplyOffset(gTxVfo);      // derive freq_config_TX now (simplex: TX == RX) for PTT-to-answer
+    gTxVfo->Modulation = settings.modulationType;   // VUURWERK: G095 carry what was heard (PATROL may use the range's)
+    SETTINGS_SaveChannel(gTxVfo->CHANNEL_SAVE, gEeprom.TX_VFO, gTxVfo, 1);   // persist, no reload
+  }
+
+  RestoreRegisters();
+
+  // v1.4.3: deterministic exit -- ALWAYS come back on the operator's own VFO, with a fresh full
+  // dual-watch dwell (countdown reloaded BEFORE the flag is cleared, as every other site does).
+  // VUURWERK: G116 granted after the release wait, so a long EXIT hold cannot use it up
+  // (a held PTT only defers the alternate: the countdown still runs). Same for battery
+  // save: a hold can latch gSchedulePowerSave, and the FOREGROUND exit never clears it.
+  gDualWatchCountdown_10ms   = dual_watch_count_after_1_10ms;
+  gScheduleDualWatch         = false;
+  gBatterySaveCountdown_10ms = battery_save_count_10ms;
+  gSchedulePowerSave         = false;
+  gRxVfoIsActive             = false;
+  gUpdateStatus              = true;   // VUURWERK: G024 replace the spectrum's status line
+  // VUURWERK: G017/G106/G117 full stock resync. Every caller returns through ProcessKey, whose
+  // tail runs RADIO_SelectVfos + RADIO_SetupRegisters(true) (retune, interrupt drain, REG_3F
+  // re-arm, LED and speaker off, FUNCTION_FOREGROUND) and then ACTION_Monitor if monitor is on.
+  gFlagReconfigureVfos       = true;
 }

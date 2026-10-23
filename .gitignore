@@ -7,7 +7,18 @@
 
 # Binary outputs (release binary tracked in release/ folder)
 vuurwerk-*
-!release/vuurwerk-v1.5.0.packed.bin
+!release/vuurwerk-v1.5.1.packed.bin
+
+
+
+
+
+
+
+
+
+
+
 
 # Build logs
 *.log
@@ -41,3 +52,5 @@ desktop.ini
 
 # Executables in utils
 utils/*.exe
+
+# Dev-only: internal working notes are TRACKED here, stripped at publish time

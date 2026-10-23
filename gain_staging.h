@@ -20,7 +20,6 @@
 
 typedef struct {
     uint8_t  table_index;       // Current index into am_fix gain_table[]
-    uint8_t  table_index_prev;  // Previous index (for change detection)
     int16_t  prev_rssi;         // Previous RSSI for averaging
     uint16_t hold_counter;      // Hold timer (in 10ms ticks, prevents hunting)
 } GainStaging_t;

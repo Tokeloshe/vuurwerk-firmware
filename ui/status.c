@@ -117,7 +117,7 @@ void UI_DisplayStatus()
 	x += sizeof(BITMAP_VoicePrompt);
 #endif
 
-	if(!SCANNER_IsScanning()) {
+	if(!SCANNER_IsScanning() && !SCANWATCH_IsActive()) { // VUURWERK: G065 keep "S+W" visible
 		uint8_t dw = (gEeprom.DUAL_WATCH != DUAL_WATCH_OFF) + (gEeprom.CROSS_BAND_RX_TX != CROSS_BAND_OFF) * 2;
 		if(dw == 1 || dw == 3) { // DWR - dual watch + respond
 			if(gDualWatchActive)

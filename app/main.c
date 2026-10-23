@@ -77,33 +77,29 @@ void toggle_chan_scanlist(void)
 }
 
 // ---- Calling frequency lookup table ----
+// v1.5.1: restored as a one-way jump (the v1.3.0 second-press restore was
+// retired for flash). Band edges in 10 kHz units to keep the table small;
+// VUURWERK: G029 they are compared against the full frequency, inclusive.
 typedef struct {
-	uint32_t band_start;    // band lower edge in Hz/10
-	uint32_t band_end;      // band upper edge in Hz/10
+	uint16_t band_start;    // band lower edge in 10 kHz
+	uint16_t band_end;      // band upper edge in 10 kHz
 	uint32_t call_freq;     // calling frequency in Hz/10
-	uint16_t step_freq;     // step size in Hz/10
+	uint8_t  step;          // VUURWERK: G119 STEP_* index, so the step can be saved
 	uint8_t  modulation;    // 0=FM, 1=AM, 2=USB
 } BandCallFreq_t;
 
 static const BandCallFreq_t band_call_table[] = {
-	{ 14400000, 14430000, 14420000, 100,   MODULATION_USB },  // 2m SSB (narrow, checked first)
-	{ 14400000, 14800000, 14652000, 500,   MODULATION_FM  },  // 2m FM
-	{ 43200000, 43300000, 43210000, 500,   MODULATION_USB },  // 70cm SSB (narrow, first)
-	{ 42000000, 45000000, 44600000, 2500,  MODULATION_FM  },  // 70cm FM
-	{ 15100000, 15400000, 15194000, 1125,  MODULATION_FM  },  // MURS 151.940 MHz
-	{ 46200000, 46700000, 46256250, 1250,  MODULATION_FM  },  // FRS/GMRS 462.5625 MHz
-	{  2690000,  2740000,  2718500, 1000,  MODULATION_FM  },  // CB 27.185 MHz
-	{ 15600000, 16200000, 15680000, 2500,  MODULATION_FM  },  // Marine 156.800 MHz
-	{ 11800000, 13600000, 12150000, 2500,  MODULATION_AM  },  // Airband 121.500 MHz
+	{ 14400, 14430, 14420000, STEP_1kHz,    MODULATION_USB },  // 2m SSB (narrow, checked first)
+	{ 14400, 14800, 14652000, STEP_5kHz,    MODULATION_FM  },  // 2m FM
+	{ 43200, 43300, 43210000, STEP_5kHz,    MODULATION_USB },  // 70cm SSB (narrow, first)
+	{ 42000, 45000, 44600000, STEP_25kHz,   MODULATION_FM  },  // 70cm FM
+	{ 15100, 15400, 15194000, STEP_10kHz,   MODULATION_FM  },  // MURS 151.940 MHz
+	{ 46200, 46700, 46256250, STEP_12_5kHz, MODULATION_FM  },  // FRS/GMRS 462.5625 MHz
+	{  2690,  2741,  2718500, STEP_10kHz,   MODULATION_FM  },  // CB 27.185 MHz (VUURWERK: G029 ch 40)
+	{ 15600, 16200, 15680000, STEP_25kHz,   MODULATION_FM  },  // Marine 156.800 MHz
+	{ 11800, 13600, 12150000, STEP_25kHz,   MODULATION_AM  },  // Airband 121.500 MHz
 };
 #define BAND_CALL_COUNT (sizeof(band_call_table) / sizeof(band_call_table[0]))
-
-// ---- Save/restore state for calling freq toggle ----
-static bool     call_freq_active   = false;
-static uint32_t saved_frequency    = 0;
-static uint16_t saved_step         = 0;
-static uint8_t  saved_modulation   = 0;
-static uint8_t  saved_step_setting = 0;
 
 static void VUURWERK_FKeyShortcut(uint8_t key_num)
 {
@@ -111,14 +107,11 @@ static void VUURWERK_FKeyShortcut(uint8_t key_num)
 		case 1: { // F+1 = BAND -- cycle frequency band (matches "1 BAND" printed)
 			uint8_t Vfo = gEeprom.TX_VFO;
 			if (!IS_FREQ_CHANNEL(gTxVfo->CHANNEL_SAVE)) {
+				gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL; // VUURWERK: G083 refusal beep
 				TOAST_Show("FREQ ONLY");
 				break;
 			}
-#ifdef ENABLE_WIDE_RX
-			if (gTxVfo->Band == BAND7_470MHz && gTxVfo->pRX->Frequency < _1GHz_in_KHz) {
-				gTxVfo->pRX->Frequency = _1GHz_in_KHz;
-			}
-#endif
+			// VUURWERK: G082 dead 1 GHz hop removed (the band reload discarded it)
 			gTxVfo->Band += 1;
 			if (gTxVfo->Band == BAND5_350MHz && !gSetting_350EN)
 				gTxVfo->Band += 1;
@@ -155,10 +148,12 @@ static void VUURWERK_FKeyShortcut(uint8_t key_num)
 			bool was_mr = IS_MR_CHANNEL(gEeprom.ScreenChannel[gEeprom.TX_VFO]);
 			COMMON_SwitchVFOMode();
 			bool is_mr  = IS_MR_CHANNEL(gEeprom.ScreenChannel[gEeprom.TX_VFO]);
-			if (was_mr == is_mr)
+			if (was_mr == is_mr) {
+				gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL; // VUURWERK: G083 refusal beep
 				TOAST_Show("NO CHANNELS");
-			else
+			} else {
 				TOAST_Show(is_mr ? "MR MODE" : "VFO MODE");
+			}
 			// === END VUURWERK ===
 			break;
 		}
@@ -166,7 +161,7 @@ static void VUURWERK_FKeyShortcut(uint8_t key_num)
 		case 4: { // F+4 = Cycle squelch level (FC key repurposed)
 			gEeprom.SQUELCH_LEVEL = (gEeprom.SQUELCH_LEVEL + 1) % 10;
 			gRequestSaveSettings = true;
-			gVfoConfigureMode = VFO_CONFIGURE_RELOAD;
+			gVfoConfigureMode = VFO_CONFIGURE; // VUURWERK: G080 no reload, keeps unsaved MR edits
 			gFlagResetVfos = true;
 			char msg[7];
 			msg[0] = 'S';
@@ -215,51 +210,44 @@ static void VUURWERK_FKeyShortcut(uint8_t key_num)
 			break;
 		}
 
-		case 9: { // F+9 = Call -- calling freq jump (matches "9 Call")
-			// VUURWERK v1.3.0 (F5): operate on the operator's VFO (TX_VFO),
-			// not gRxVfo -- dual watch flips RX_VFO in the background and
-			// crossband inverts it, so gRxVfo at keypress time could be the
-			// wrong VFO, and the untagged restore could write VFO A's saved
-			// state onto VFO B. The restore now targets the VFO it saved
-			// from; RADIO_SelectVfos re-syncs gRxVfo before reconfigure.
-			static uint8_t saved_vfo;
-			if (call_freq_active) {
-				VFO_Info_t *p = &gEeprom.VfoInfo[saved_vfo];
-				p->pRX->Frequency = saved_frequency;
-				p->pTX->Frequency = saved_frequency;
-				p->STEP_SETTING   = saved_step_setting;
-				p->StepFrequency  = saved_step;
-				p->Modulation     = saved_modulation;
-				call_freq_active = false;
-				RADIO_SelectVfos();
-				RADIO_SetupRegisters(true);
-				TOAST_Show("RESTORED");
-			} else {
-				VFO_Info_t *p = &gEeprom.VfoInfo[gEeprom.TX_VFO];
-				uint32_t freq = p->pRX->Frequency;
-				for (uint8_t i = 0; i < BAND_CALL_COUNT; i++) {
-					if (freq >= band_call_table[i].band_start &&
-						freq <= band_call_table[i].band_end) {
-						saved_vfo          = gEeprom.TX_VFO;
-						saved_frequency    = freq;
-						saved_step         = p->StepFrequency;
-						saved_step_setting = p->STEP_SETTING;
-						saved_modulation   = p->Modulation;
-						p->pRX->Frequency = band_call_table[i].call_freq;
-						p->pTX->Frequency = band_call_table[i].call_freq;
-						p->StepFrequency  = band_call_table[i].step_freq;
-						p->Modulation     = band_call_table[i].modulation;
-						call_freq_active = true;
-						RADIO_SelectVfos();
-						RADIO_SetupRegisters(true);
-						TOAST_Show("CALL FREQ");
-						break;
-					}
-				}
-				if (!call_freq_active) {
-					TOAST_Show("NO BAND");
+		case 9: { // F+9 = Call -- one-way jump to the band's calling frequency
+			// v1.5.1: the save/restore toggle was retired for flash; this is
+			// a plain jump on the operator's VFO (gTxVfo, the VFO the save
+			// below writes; gRxVfo can be the wrong VFO under dual watch).
+			// To go back, key the old frequency in.
+			VFO_Info_t *p = gTxVfo;
+			if (IS_MR_CHANNEL(p->CHANNEL_SAVE)) { // VUURWERK: G026 memory channels are never touched
+				gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL; // VUURWERK: G083 refusal beep
+				TOAST_Show("FREQ ONLY");
+				break;
+			}
+			const uint32_t f = p->pRX->Frequency;
+			for (uint8_t i = 0; i < BAND_CALL_COUNT; i++) {
+				const BandCallFreq_t *b = &band_call_table[i];
+				if (f >= b->band_start * 1000u && f <= b->band_end * 1000u) { // VUURWERK: G029 exact inclusive edges
+					// VUURWERK: G025 G119 commit like a keyed-in frequency: simplex,
+					// no tones, a storable step; the ProcessKey tail saves and reloads
+					// (on a held 9 it retunes now and saves on release)
+					p->freq_config_RX.Frequency      = b->call_freq;
+					p->freq_config_TX.Frequency      = b->call_freq;
+					p->STEP_SETTING                  = b->step;
+					p->StepFrequency                 = gStepFrequencyTable[b->step];
+					p->Modulation                    = b->modulation;
+					p->TX_OFFSET_FREQUENCY_DIRECTION = TX_OFFSET_FREQUENCY_DIRECTION_OFF;
+					p->FrequencyReverse              = false;
+					p->freq_config_RX.CodeType       = CODE_TYPE_OFF;
+					p->freq_config_TX.CodeType       = CODE_TYPE_OFF;
+					p->freq_config_RX.Code           = 0;
+					p->freq_config_TX.Code           = 0;
+					p->SCRAMBLING_TYPE               = 0;
+					gRequestSaveChannel              = 1;
+					gFlagReconfigureVfos             = true;
+					TOAST_Show("CALL FREQ");
+					return;
 				}
 			}
+			gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL; // VUURWERK: G083 refusal beep
+			TOAST_Show("NO BAND");
 			break;
 		}
 
@@ -292,11 +280,11 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
 		return;
 	}
 
+	gBeepToPlay     = BEEP_1KHZ_60MS_OPTIONAL; // VUURWERK: G083 before the call, so a refusal can override it
 	VUURWERK_FKeyShortcut(Key - KEY_0);
 	gWasFKeyPressed = false;
 	gUpdateStatus   = true;
 	gUpdateDisplay  = true;
-	gBeepToPlay     = BEEP_1KHZ_60MS_OPTIONAL;
 }
 // === END VUURWERK ===
 
@@ -472,6 +460,7 @@ static void MAIN_Key_EXIT(bool bKeyPressed, bool bKeyHeld)
 			gWasFKeyPressed = false;
 			gUpdateStatus   = true;
 			if (!IS_FREQ_CHANNEL(gTxVfo->CHANNEL_SAVE)) {
+				gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL; // VUURWERK: G083 refusal beep
 				TOAST_Show("FREQ ONLY");
 				return;
 			}
@@ -661,7 +650,7 @@ static void MAIN_Key_STAR(bool bKeyPressed, bool bKeyHeld)
 		gRequestDisplayScreen = DISPLAY_SCANNER;
 	}
 	
-	gPttWasReleased = true;
+	// VUURWERK: G079 no gPttWasReleased here, it swallowed the next key's release
 	gUpdateStatus   = true;
 }
 

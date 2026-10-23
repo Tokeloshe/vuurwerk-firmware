@@ -27,8 +27,12 @@ bool backlightOn;
 
 void BACKLIGHT_InitHardware()
 {
-	// 48MHz / 94 / 1024 ~ 500Hz
-	const uint32_t PWM_FREQUENCY_HZ =  1000;
+	// VUURWERK v1.5.1: 6.7 kHz carrier (prescaler 7), above the 3 kHz audio
+	// passband. The stock ~1 kHz PWM coupled into the mic preamp and PA rail
+	// and was heard as a whine by receiving stations whenever the screen was
+	// dimmed during TX. main.c used to re-program the prescaler after
+	// BOARD_Init; setting it here once is the same register value.
+	const uint32_t PWM_FREQUENCY_HZ = 6696;   // 48000000 / 1024 / 6696 = 7
 	PWM_PLUS0_CLKSRC |= ((48000000 / 1024 / PWM_FREQUENCY_HZ) << 16);
 	PWM_PLUS0_PERIOD = 1023;
 

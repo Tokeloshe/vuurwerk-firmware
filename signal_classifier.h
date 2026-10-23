@@ -24,20 +24,7 @@ typedef enum {
     SIGNAL_CLASS_SLOW = 3,   // S: carriers, CW
 } SignalClass_t;
 
-typedef struct {
-    int16_t prev_rssi;
-    uint16_t rise_time_ms;
-    uint8_t stable_count;
-    SignalClass_t classification;
-} SignalClassifier_t;
-
-extern SignalClassifier_t gSignalClassifier[2];
-
-// VUURWERK v1.3.0 (F8): frequency is the current RX frequency in 10Hz
-// units; a change vs the previous call resets the per-VFO classifier
-// state so prior-channel classification does not bleed across hops.
-void SIGNAL_CLASSIFIER_Update(uint8_t vfo, int16_t rssi_dbm, uint32_t frequency);
+// G050: retired; GetClass returns NOISE.
 SignalClass_t SIGNAL_CLASSIFIER_GetClass(uint8_t vfo);
-char SIGNAL_CLASSIFIER_GetSymbol(uint8_t vfo);
 
 #endif

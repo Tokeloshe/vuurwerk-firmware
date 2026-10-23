@@ -81,9 +81,8 @@
 #include "bandscope.h"
 #include "gain_staging.h"
 #include "vfo_split.h"
-#include "rssi_filter.h"
+// VUURWERK: G049/G050 rssi_filter and signal_classifier includes removed
 #include "rssi_histogram.h"
-#include "signal_classifier.h"
 #include "dual_watch_mgmt.h"
 #include "scanwatch.h"
 #include "side_toast.h"
@@ -1193,7 +1192,8 @@ void APP_TimeSlice10ms(void)
 #endif
 
 #ifdef ENABLE_AM_FIX
-	if (gRxVfo->Modulation == MODULATION_AM) {
+	// VUURWERK: G044 no AM gain adaptation while a Split hop has the chip on B
+	if (gRxVfo->Modulation == MODULATION_AM && split_state == SPLIT_STATE_IDLE) {
 		AM_fix_10ms(gEeprom.RX_VFO);
 	}
 #endif
@@ -1204,6 +1204,12 @@ void APP_TimeSlice10ms(void)
 		UART_HandleCommand();
 		__enable_irq();
 	}
+#endif
+
+#ifdef ENABLE_FLASHLIGHT
+	// VUURWERK: G057 before the reduced-service return so a flat pack still times the light out and SOS keeps blinking
+	FlashlightTimeSlice();
+	FLASHLIGHT_WATCHDOG_Tick();
 #endif
 
 	if (gReducedService)
@@ -1277,13 +1283,6 @@ void APP_TimeSlice10ms(void)
 		return;
 #endif
 
-#ifdef ENABLE_FLASHLIGHT
-	FlashlightTimeSlice();
-	// === VUURWERK v1.2.5 Flashlight watchdog (auto-off ON/BLINK after 30 min, SOS preserved) ===
-	FLASHLIGHT_WATCHDOG_Tick();
-	// === END VUURWERK ===
-#endif
-
 #ifdef ENABLE_VOX
 	if (gVoxResumeCountdown > 0)
 		gVoxResumeCountdown--;
@@ -1343,8 +1342,9 @@ void APP_TimeSlice10ms(void)
 		// repeater tail tone elimination
 		if (gRTTECountdown_10ms > 0) {
 			if (--gRTTECountdown_10ms == 0) {
-				//if (gCurrentFunction != FUNCTION_FOREGROUND)
-					FUNCTION_Select(FUNCTION_FOREGROUND);
+				// VUURWERK: G110 full RX setup, a SIDE2 1750 Hz tap in the window
+				// leaves the BK4819 in TX mode (ends in FUNCTION_Select(FOREGROUND))
+				RADIO_SetupRegisters(true);
 
 				gUpdateStatus  = true;
 				gUpdateDisplay = true;
@@ -1362,29 +1362,7 @@ void APP_TimeSlice10ms(void)
 #endif
 
 
-	SCANNER_TimeSlice10ms();
-
-	// === VUURWERK v1.2.7 CSS scan FOUND beep ===
-	// Symmetric counterpart to the v1.2.5 CSS scan soft-timeout
-	// watchdog FAILED beep (500HZ double-beep at line 1597). On the
-	// SCAN_CSS_STATE_SCANNING -> SCAN_CSS_STATE_FOUND transition emit
-	// a single 1 kHz 60 ms OPTIONAL beep so the operator gets audible
-	// confirmation of a successful tone find without staring at the
-	// SCANNER or MENU display. Latch resets the moment the scan
-	// session ends (SCANNER_IsScanning() goes false on EXIT) so the
-	// next scan launch gets its own cue.
-	{
-		static uint8_t s_beeped;
-		if (SCANNER_IsScanning() && gScanCssState == SCAN_CSS_STATE_FOUND && gScanUseCssResult) {
-			if (!s_beeped) {
-				gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
-				s_beeped    = 1;
-			}
-		} else {
-			s_beeped = 0;
-		}
-	}
-	// === end VUURWERK ===
+	SCANNER_TimeSlice10ms();   // VUURWERK: G038 plays the FOUND beep itself
 
 #ifdef ENABLE_AIRCOPY
 	if (gScreenToDisplay == DISPLAY_AIRCOPY && gAircopyState == AIRCOPY_TRANSFER && gAirCopyIsSendMode == 1) {
@@ -1394,7 +1372,7 @@ void APP_TimeSlice10ms(void)
 	}
 #endif
 
-	// === VUURWERK v1.1.0 Squelch Tail Elimination (reads REG_0C, writes REG_47) ===
+	// === VUURWERK v1.1.0 Squelch Tail Elimination (reads g_CTCSS_Lost/g_CDCSS_Lost, writes REG_47) ===
 	SQUELCH_TAIL_Process();
 
 	// === VUURWERK v1.1.0 Smart Squelch (reads REG_67/65/63, writes REG_78) ===
@@ -1411,11 +1389,10 @@ void APP_TimeSlice10ms(void)
 			uint8_t vfo = gEeprom.RX_VFO;
 			int16_t rssi_dbm = BK4819_GetRSSI_dBm();  // VUURWERK v1.3.3: shared helper (was open-coded (raw/2)-160)
 
-			gVFO_RSSI[vfo] = RSSI_FILTER_Update(vfo, rssi_dbm);    // Now in dBm
-			SIGNAL_QUALITY_Update(gVFO_RSSI[vfo], gEeprom.VfoInfo[vfo].pRX->Frequency);  // dBm + per-freq ring reset
-			RSSI_HISTOGRAM_Update(vfo, gVFO_RSSI[vfo]);             // dBm: bins now work
-			SIGNAL_CLASSIFIER_Update(vfo, gVFO_RSSI[vfo],          // dBm: +-3 threshold calibrated
-				gEeprom.VfoInfo[vfo].pRX->Frequency);   // VUURWERK v1.3.0 (F8) per-freq reset
+			// VUURWERK: G049/G050 RSSI filter and classifier removed, nothing read them
+			// VUURWERK: G051 raw dBm, the EWMA hid the fading that Q measures
+			SIGNAL_QUALITY_Update(rssi_dbm, gEeprom.VfoInfo[vfo].pRX->Frequency);  // dBm + per-freq ring reset
+			// VUURWERK: G027 histogram is fed while parked (smart_squelch.c), so its floor is the noise
 
 			if (!was_receiving) {
 				s_rx_vfo = vfo;
@@ -1480,25 +1457,9 @@ void APP_TimeSlice500ms(void)
 		}
 	}
 
-	if (gDTMF_RX_live_timeout > 0)
-	{
-		#ifdef ENABLE_RSSI_BAR
-			if (center_line == CENTER_LINE_DTMF_DEC ||
-				center_line == CENTER_LINE_NONE)  // wait till the center line is free for us to use before timing out
-		#endif
-		{
-			if (--gDTMF_RX_live_timeout == 0)
-			{
-				if (gDTMF_RX_live[0] != 0)
-				{
-					memset(gDTMF_RX_live, 0, sizeof(gDTMF_RX_live));
-					gUpdateDisplay   = true;
-				}
-			}
-		}
-	}
+	// VUURWERK: G113 dead live DTMF decoder timeout removed (the buffer never fills)
 
-	if (gMenuCountdown > 0)
+	if (gMenuCountdown > 0 && !gCssBackgroundScan)   // VUURWERK: G125 hold the menu timeout during a menu tone scan
 		if (--gMenuCountdown == 0)
 			exit_menu = (gScreenToDisplay == DISPLAY_MENU);	// exit menu mode
 
@@ -1649,6 +1610,14 @@ void APP_TimeSlice500ms(void)
 				disp = DISPLAY_MAIN;
 			}
 
+			// VUURWERK: G069 drop the Scramb live preview from the receiver
+			// (not mid-TX: the end of TX re-registers anyway), monitor re-armed as ProcessKey does
+			if (gIsInSubMenu && gCurrentFunction != FUNCTION_TRANSMIT && UI_MENU_GetCurrentMenuId() == MENU_SCR) {
+				RADIO_SetupRegisters(true);
+				if (gMonitor)
+					ACTION_Monitor();
+			}
+
 			if (disp != DISPLAY_INVALID) {
 				GUI_SelectNextDisplay(disp);
 			}
@@ -1674,7 +1643,7 @@ void APP_TimeSlice500ms(void)
 	// typical successful scans complete in 3-10 s) ===
 	if (gScanCssState == SCAN_CSS_STATE_SCANNING && gScanProgressIndicator > 60) {
 		gScanCssState  = SCAN_CSS_STATE_FAILED;
-		gBeepToPlay    = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
+		AUDIO_PlayBeep(BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL);   // VUURWERK: G038 sound it now
 		gUpdateStatus  = true;
 		gUpdateDisplay = true;
 	}
@@ -1753,7 +1722,11 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 	if (gEeprom.AUTO_KEYPAD_LOCK)
 		gKeyLockCountdown = 30;     // 15 seconds
 
-	if (!bKeyPressed) { // key released
+	// VUURWERK: G078/G109 PTT press also flushes a held key's deferred save,
+	// so TX starts on the displayed values and nothing reconfigures mid-over.
+	// Not while BCL holds a busy channel: the reconfigure would leave RECEIVE
+	// and RADIO_PrepareTX would no longer refuse (the release flushes it then)
+	if (!bKeyPressed || (Key == KEY_PTT && !(gTxVfo->BUSY_CHANNEL_LOCK && gCurrentFunction == FUNCTION_RECEIVE))) {
 		if (flagSaveVfo) {
 			SETTINGS_SaveVfoIndices();
 			flagSaveVfo = false;
@@ -1780,7 +1753,8 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 				gVfoConfigureMode = VFO_CONFIGURE;
 		}
 	}
-	else { // key pressed or held
+
+	if (bKeyPressed) { // key pressed or held (VUURWERK: G078/G109 was else)
 		const int m = UI_MENU_GetCurrentMenuId();
 		if 	(	//not when PTT and the backlight shouldn't turn on on TX
 				!(Key == KEY_PTT && !(gSetting_backlight_on_tx_rx & BACKLIGHT_ON_TR_TX))
@@ -1791,13 +1765,9 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 			BACKLIGHT_TurnOn();
 		}
 
-		if (Key == KEY_EXIT && bKeyHeld) { // exit key held pressed
-			// clear the live DTMF decoder
-			if (gDTMF_RX_live[0] != 0) {
-				memset(gDTMF_RX_live, 0, sizeof(gDTMF_RX_live));
-				gDTMF_RX_live_timeout = 0;
-				gUpdateDisplay        = true;
-			}
+		// VUURWERK: G111 not while keyed, monitor/beep here would drop the carrier
+		if (Key == KEY_EXIT && bKeyHeld && gCurrentFunction != FUNCTION_TRANSMIT) { // exit key held pressed
+			// VUURWERK: G113 dead live DTMF decoder clear removed
 
 			// cancel user input
 			cancelUserInputModes();
@@ -2012,7 +1982,8 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 			// event AND a binding exists (NONE stays
 			// stock-silent so deliberate empty bindings
 			// behave unchanged).
-			if (bKeyHeld && bKeyPressed && fired != ACTION_OPT_NONE)
+			// VUURWERK: G127 keep the lock refusal, only the stock click is upgraded
+			if (bKeyHeld && bKeyPressed && fired != ACTION_OPT_NONE && gBeepToPlay == BEEP_1KHZ_60MS_OPTIONAL)
 				gBeepToPlay = BEEP_880HZ_40MS_OPTIONAL;
 		}
 		// === END VUURWERK ===
@@ -2022,10 +1993,9 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 	}
 
 Skip:
-	if (gBeepToPlay != BEEP_NONE) {
-		AUDIO_PlayBeep(gBeepToPlay);
+	// VUURWERK: G041 keep the stock RX silence (beep now tested after the reconfigure)
+	if (gCurrentFunction == FUNCTION_RECEIVE)
 		gBeepToPlay = BEEP_NONE;
-	}
 
 	if (gFlagAcceptSetting) {
 		gMenuCountdown = menu_timeout_500ms;
@@ -2127,6 +2097,15 @@ Skip:
 		gMenuCountdown      = menu_timeout_500ms;
 
 		MENU_ShowCurrentSetting();
+	}
+
+	// VUURWERK: G041 beep moved here from Skip, draw the result before the
+	// blocking beep (still ahead of RADIO_PrepareTX)
+	if (gBeepToPlay != BEEP_NONE) {
+		GUI_SelectNextDisplay(gRequestDisplayScreen);
+		GUI_DisplayScreen();
+		AUDIO_PlayBeep(gBeepToPlay);
+		gBeepToPlay = BEEP_NONE;
 	}
 
 	if (gFlagPrepareTX) {

@@ -1,66 +1,123 @@
-VUURWERK v1.3.3 - Quick Start Guide
+VUURWERK v1.5.1 - Quick Start
 
-FLASHING:
-1. Download vuurwerk-v1.3.3.packed.bin from the release/ folder
-2. Turn off your radio
-3. Hold PTT, turn on radio (flashlight LED = bootloader mode)
-4. Connect programming cable (Kenwood 2-pin) to radio and computer
-5. Open Chrome: https://egzumer.github.io/uvtools/
-6. Click "Select firmware file", choose vuurwerk-v1.3.3.packed.bin
-7. Click "Flash firmware", wait ~10 seconds
-8. Disconnect cable, power cycle radio
-9. VUURWERK boot screen appears. Done.
+FLASHING
 
-Your channels and settings are preserved. Only the firmware changes.
-Chrome required (Web Serial API). Firefox and Safari won't work.
+1. Turn the radio off. Hold PTT and turn it on: the flashlight
+   LED lights, the bootloader is waiting.
+2. Cable in, open https://egzumer.github.io/uvtools/ in Chrome,
+   pick vuurwerk-v1.5.1.packed.bin, click Flash firmware.
+3. Power cycle. The VUURWERK v1.5.1 banner shows for about a
+   second. Channels and settings are kept. See FLASHING.md.
 
-SHORTCUTS (press F then number key):
-F+0  Cycle modulation (FM/AM/USB)
-F+1  Cycle band (50/144/430/...)
-F+2  Toggle VFO (A/B)
-F+3  Toggle VFO/MR (Frequency/Memory)
-F+4  Cycle squelch level (0-9)
-F+5  Spectrum analyzer
-F+6  Cycle TX power (LOW/MID/HIGH)
-F+7  Toggle bandscope (On/Off)
-F+8  Reverse offset (Normal/Reverse)
-F+9  Calling frequency jump (press again to return)
-F+*  CTCSS/DCS scanner
+SHORTCUTS (press F, the # key, then the key; toast shown)
 
-MENU:
-Press MENU for categorized menu (7 categories)
-Keys 1-7 jump directly to a category
-Long-press MENU for About screen
-v1.3.1: cryptic items show a plain-language hint on the bottom
-line while browsing (e.g. RxMode = DUAL WATCH / CROSSBAND RX)
+F+0     Modulation FM / AM / USB            MOD: FM  AM  USB
+F+1     Next band (350 MHz band only when   BAND
+        350 En is ON); FREQ ONLY on a
+        memory channel
+F+2     Switch VFO                          VFO: A  VFO: B
+F+3     Frequency / memory mode             VFO MODE  MR MODE
+        (NO CHANNELS if none stored)
+F+4     Squelch level, wraps 9 to 0         SQL: 0 .. SQL: 9
+F+5     Spectrum analyzer                   (no toast)
+F+6     TX power                            PWR: LOW  MID  HIGH
+F+7     Bandscope on the centre line        SCOPE ON  SCOPE OFF
+F+8     Reverse (swap RX and TX)            REVERSE  NORMAL
+F+9     Band calling frequency, simplex,    CALL FREQ
+        no tones; FREQ ONLY on a memory
+        channel, NO BAND where none exists
+F+STAR  CTCSS/DCS tone scan                 FM ONLY in AM or USB
+F+EXIT  Reset VFO to clean simplex:         SIMPLEX
+        offset, tones, scrambler, reverse
+        off, FM; FREQ ONLY on a memory
+        channel
 
-INDICATORS (v1.3.1):
-SP in the status bar = VFO Split armed (VFO B walks channels
-by itself while you listen on A; ACT toast + beep on activity)
-SAG toast after TX = battery sagged 0.20V+ under load (tired pack)
+LONG PRESSES (main screen)
 
-AUTOMATIC (no action needed):
-TX Soft Start, CTCSS Lead-In, TX Compressor activate on every PTT
-FM Gain Staging, Adaptive Squelch, Signal Classifier run during RX
-Squelch Tail Elimination runs whenever CTCSS is set
+F         Keypad lock on / off         LOCKED  UNLOCKED
+STAR      Scan on / off                SCAN ON  SCAN OFF
+digit     Same as F + that digit
+MENU      Runs the M Long action (Menu > CONFIG > M Long)
+EXIT      Cancels a frequency or channel entry
 
-SPECTRUM VIEW SIDE-BUTTONS (v1.2.7 symmetric keymap):
-SIDE1 short / hold   Step frequency UP (auto-repeats while held)
-SIDE2 short / hold   Step frequency DOWN (auto-repeats while held)
-MENU short           Blacklist current peak bin
+TX
 
-ToggleBacklight is no longer reachable from spectrum view. To toggle
-the backlight while in spectrum, press EXIT, toggle from main screen,
-F+5 to re-enter.
+PTT transmits. The bottom line reads TX 0:07 PWR:H (time, power).
+Hold SIDE2 while transmitting to send a 1750 Hz tone burst,
+whatever SIDE2 is normally bound to.
+F+6 cycles TX power. The battery icon keeps updating while you
+transmit; a SAG 0.25V toast after the over means the pack sagged
+0.20 V or more under load.
 
-CSS SCANNER (v1.2.7 robustness):
-Park on a frequency with an active carrier first. The scanner's
-pre-flight RSSI gate aborts with NO SIGNAL toast on dead air.
-CTCSS lock now matches DCS speed (single confirmation, 120 ms dwell).
-Soft-timeout 30 seconds.
+MENU
 
-See ACCESS_MAP.md for the complete feature access guide.
-See README.md for full documentation.
-See USER_MANUAL.md for button-by-button operator manual.
+MENU opens the category picker: 1 RECEIVE, 2 TONE, 3 TX, 4 SCAN,
+5 CHANNEL, 6 CONFIG. Keys 1-6 jump straight in (1-7 when UNLOCK
+is shown, after power-on with PTT+SIDE1 held). UP/DOWN move, MENU
+enters or accepts, EXIT backs out. The menu closes after 20 s
+without a key. About: MENU, 6, scroll to About, MENU.
+Cryptic items show a plain hint on the bottom line while browsing.
+
+INDICATORS
+
+RX S7 -65dBm Q3     receiving: S-level, strength, quality 0-3
+TX 0:07 PWR:H       transmitting: elapsed time and power
+SCANNING 12c/s      scanning, with the live channels per second
+12.5kHz W FM        idle: step, wide or narrow, modulation
+Status bar          S = frequency scan, 1 2 * = memory scan list,
+                    Cs = tone scan, S+W = Scan+Watch, SP = VFO
+                    Split armed, Q bars = signal quality
+
+AUTOMATIC (nothing to set)
+
+Soft key-up and the TX compressor act on every FM transmission.
+A CTCSS/DCS lead-in lets the repeater hear your tone first.
+Receiver gain adapts to signal strength; the S-meter stays true.
+Smart squelch learns the idle noise floor on your frequency.
+Squelch tail elimination works on CTCSS and DCS channels (STE).
+
+PATROL (spectrum, VOX mode)
+
+Set it:   STAR until VOX shows. Move to the start of the range,
+          press 2 (SET LO). Move to the end, press 8 (SET HI).
+Run it:   Press 0. PTRL shows in the corner. 0 or EXIT stops it.
+Running:  MENU skips the frequency it is parked on, PTT locks on
+          the voice you hear (LOCKED), 0 or EXIT stops. Every
+          other key is ignored; on a dark screen the first key
+          only wakes the backlight.
+Settings: Menu > SCAN: PSens LOW/NORM/HIGH, PSpeed SLOW/NORM,
+          PDwell SHORT/NORM/LONG, PResum SHORT/NORM/LONG.
+It stops on voice, and also on idle carriers, birdies and data
+tones. A 60 s cap moves it on and skips that frequency for about
+2 minutes. With no range set it walks the span on screen.
+At 5 % battery PATROL stops and LOW BATTERY shows.
+The range survives power cycles and Reset.
+
+VOX LOCK CARRY-OVER (EXIT while locked, frequency mode)
+
+The VFO takes the locked frequency, rounded to the VFO step, and
+the spectrum's modulation. It keeps its own offset and tones: if
++, -, CT or DCS show after a simplex find, press F+EXIT first.
+
+SPECTRUM SIDE BUTTONS
+
+SIDE1 / SIDE2   Move the span up / down (repeat while held)
+MENU            Blacklist the current peak
+In the STILL view (PTT in NORM or PEAK): SIDE1 = monitor,
+SIDE2 = backlight, EXIT = back to the sweep.
+While PATROL runs the side keys are ignored.
+
+CSS SCANNER (F+STAR, FM only)
+
+Press F+STAR while the station is transmitting.
+You see:   NO SIGNAL (dead air), SCAN CMP. (found) or SCAN FAIL.
+           (nothing in 30 s, double beep).
+Save it:   MENU, then MENU again at SAVE? (RX and TX tone). On a
+           memory channel you first pick the channel number, then
+           MENU again.
+Menu scan: in RxCTCS or RxDCS press MENU, then STAR to scan;
+           MENU accepts the found tone.
+
+See also: USER_MANUAL.md, WHATS_NEW.md, FLASHING.md
 
 73 de KC3TFZ

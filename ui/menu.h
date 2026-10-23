@@ -125,7 +125,13 @@ enum
 	MENU_MLONG,
 	MENU_BATTYP,
 	MENU_SCANWATCH,   // VUURWERK: Scan+Watch + VFO Split
-	MENU_ABOUT        // VUURWERK: About screen launcher
+	MENU_ABOUT,       // VUURWERK: About screen launcher
+	// VUURWERK v1.5.1: PATROL settings. All of them apply to patrol only --
+	// hold-to-sweep is unaffected by every one.
+	MENU_PSENS,
+	MENU_PSPEED,
+	MENU_PDWELL,
+	MENU_PRESUME
 };
 
 extern const uint8_t FIRST_HIDDEN_MENU_ITEM;
@@ -160,6 +166,9 @@ extern const char        gSubMenu_RX_TX[4][6];
 extern const char        gSubMenu_BAT_TXT[3][8];
 extern const char 		 gSubMenu_BATTYP[2][9];
 extern const char        gSubMenu_SCRAMBLER[11][7];
+extern const char        gSubMenu_PSENS[3][5];
+extern const char        gSubMenu_PSPEED[2][5];
+extern const char        gSubMenu_PSHORTLONG[3][6];   // shared by PDWELL and PRESUME
 
 typedef struct {char* name; uint8_t id;} t_sidefunction;
 extern const uint8_t 		 gSubMenu_SIDEFUNCTIONS_size;

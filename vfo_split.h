@@ -73,6 +73,9 @@ typedef struct {
 
 extern VfoSplit_t gVfoSplit;
 
+// G044: != SPLIT_STATE_IDLE while a hop is in flight (chip away from VFO A).
+extern SplitState_t split_state;
+
 // Hop interval durations (milliseconds)
 #define HOP_INTERVAL_SLOW    500
 #define HOP_INTERVAL_NORMAL  300

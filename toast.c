@@ -14,6 +14,7 @@
 
 #include <string.h>
 
+#include "misc.h"   // gUpdateDisplay
 #include "toast.h"
 
 char    toast_msg[TOAST_MSG_SIZE] = "";
@@ -21,6 +22,11 @@ uint8_t toast_timer = 0;
 
 void TOAST_Show(const char *msg)
 {
+	// G077: first toast in a 10 ms slice wins (EMPTY LIST over SCAN OFF).
+	// TOAST_Tick runs first in every slice, so a full timer means "posted now".
+	if (toast_timer == TOAST_DURATION_TICKS)
+		return;
+
 	strncpy(toast_msg, msg, TOAST_MSG_SIZE - 1);
 	toast_msg[TOAST_MSG_SIZE - 1] = 0;
 	toast_timer = TOAST_DURATION_TICKS;
@@ -28,6 +34,6 @@ void TOAST_Show(const char *msg)
 
 void TOAST_Tick(void)
 {
-	if (toast_timer > 0)
-		toast_timer--;
+	if (toast_timer > 0 && --toast_timer == 0)
+		gUpdateDisplay = true;   // G034: clear the expired overlay
 }

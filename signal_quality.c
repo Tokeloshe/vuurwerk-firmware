@@ -21,6 +21,10 @@ RssiHistory_t gRssiHistory;
 // rather than the inter-channel RSSI delta during VFO flips.
 static uint32_t last_frequency = 0;
 
+// G051: keep every 4th 10 ms sample, so the 8-entry window spans
+// 320 ms and catches mobile flutter instead of 80 ms of one fade.
+static uint8_t decimate = 0;
+
 void SIGNAL_QUALITY_Update(int16_t rssi_dBm, uint32_t frequency)
 {
 	if (frequency != last_frequency) {
@@ -28,6 +32,9 @@ void SIGNAL_QUALITY_Update(int16_t rssi_dBm, uint32_t frequency)
 		gRssiHistory.index = 0;
 		gRssiHistory.count = 0;
 	}
+
+	if (++decimate & 3)
+		return;
 
 	// Add to ring buffer
 	gRssiHistory.history[gRssiHistory.index] = rssi_dBm;
@@ -43,7 +50,7 @@ SignalQuality_t SIGNAL_QUALITY_Get(void)
 		return QUALITY_POOR;  // Not enough data yet
 
 	// Calculate variance using integer math ONLY
-	// variance = (sum_of_squares / N) - (mean * mean)
+	// variance = (N * sum_of_squares - sum * sum) / (N * N)
 
 	int32_t sum = 0;
 	int32_t sum_sq = 0;
@@ -54,11 +61,10 @@ SignalQuality_t SIGNAL_QUALITY_Get(void)
 		sum_sq += (val * val);
 	}
 
-	// mean = sum >> 3  (divide by 8, power of 2)
-	int16_t mean = sum >> 3;
-
-	// variance = (sum_sq >> 3) - (mean * mean)
-	int32_t variance = (sum_sq >> 3) - ((int32_t)mean * mean);
+	// G051: exact form. The old floored mean (sum >> 3 of a negative dBm
+	// sum) drove most windows negative, which read as EXCELLENT.
+	// |sum| <= 8 * 160, so neither product overflows.
+	int32_t variance = ((sum_sq << 3) - sum * sum) >> 6;
 
 	// Compare against SQUARED thresholds (no sqrt needed!)
 	// Thresholds: 100, 36, 9 (corresponding to std dev of ~10, ~6, ~3 dBm)

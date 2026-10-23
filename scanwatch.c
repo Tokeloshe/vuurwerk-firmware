@@ -14,6 +14,7 @@
 
 #include <string.h>
 #include "scanwatch.h"
+#include "functions.h"   // G043: gCurrentFunction
 
 ScanWatch_t gScanWatch;
 
@@ -50,6 +51,11 @@ bool SCANWATCH_OnScanStep(void)
 
 bool SCANWATCH_Update(bool signal_detected)
 {
+    // G043: an operator's MONITOR counts as signal, so the dwell or hold
+    // cannot expire under it and drop monitor with gMonitor latched.
+    if (gCurrentFunction == FUNCTION_MONITOR)
+        signal_detected = true;
+
     switch (gScanWatch.state)
     {
         case SCANWATCH_CHECKING:
