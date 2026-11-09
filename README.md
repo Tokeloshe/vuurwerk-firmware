@@ -7,6 +7,7 @@ VUURWERK is Afrikaans for *fireworks*.
 
 [![Latest release](https://img.shields.io/github/v/release/Tokeloshe/vuurwerk-firmware?label=release&color=blue)](https://github.com/Tokeloshe/vuurwerk-firmware/releases/latest)
 [![Downloads of the latest release](https://img.shields.io/github/downloads/Tokeloshe/vuurwerk-firmware/latest/total?label=downloads%20(latest)&color=success)](https://github.com/Tokeloshe/vuurwerk-firmware/releases/latest)
+[![Sponsor](https://img.shields.io/badge/sponsor-GitHub-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Tokeloshe)
 [![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-%245-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/Tokeloshe)
 
 ---
@@ -353,8 +354,10 @@ details and troubleshooting: [FLASHING.md](FLASHING.md).
   <br>
   <img src="assets/icon-coffee.svg" width="28" alt=""><br>
   <b>Flashed it? Heard your first voice on PATROL?</b><br>
-  If VUURWERK has earned a place on your belt, a coffee ($5) is the nicest way to say so.<br><br>
+  If VUURWERK has earned a place on your belt, a coffee ($5) or a GitHub sponsorship is the nicest way to say so.<br><br>
   <a href="https://buymeacoffee.com/Tokeloshe"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="48"></a>
+  &nbsp;&nbsp;
+  <a href="https://github.com/sponsors/Tokeloshe"><img src="https://img.shields.io/badge/Sponsor%20on%20GitHub-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub" height="48"></a>
   <br><br>
 </p>
 
@@ -390,9 +393,9 @@ the complete list of VUURWERK-original contributions.
 ## Support VUURWERK
 
 I make VUURWERK in the evenings and on weekends, and it stays free. Hundreds of
-you have downloaded it; so far not one coffee has come back. If it has earned
-a place on your belt, a coffee ($5) is the nicest way to say so, and every one
-goes straight back into the radio:
+you have flashed it. If it has earned a place on your belt, a coffee ($5) or a
+GitHub sponsorship is the nicest way to say so, and every one goes straight
+back into the radio:
 
 - **Test radios.** Every "does it work on the V2 / V3 / K6?" needs that radio on
   the bench. A UV-K5 is $30; a coffee is a sixth of one.
@@ -407,7 +410,9 @@ goes straight back into the radio:
 <br>
 <a href="https://buymeacoffee.com/Tokeloshe"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="60"></a>
 <br><br>
-<sub>About a minute. Any card, no account needed.</sub>
+<a href="https://github.com/sponsors/Tokeloshe"><img src="https://img.shields.io/badge/Sponsor%20on%20GitHub-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub" height="44"></a>
+<br><br>
+<sub>Coffee: about a minute, any card, no account needed.<br>Sponsor: two clicks if you are signed in to GitHub.</sub>
 <br><br>
 </td>
 <td align="center" valign="middle" width="44%">
