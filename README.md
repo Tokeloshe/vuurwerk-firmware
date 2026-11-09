@@ -7,7 +7,7 @@ VUURWERK is Afrikaans for *fireworks*.
 
 [![Latest release](https://img.shields.io/github/v/release/Tokeloshe/vuurwerk-firmware?label=release&color=blue)](https://github.com/Tokeloshe/vuurwerk-firmware/releases/latest)
 [![Downloads of the latest release](https://img.shields.io/github/downloads/Tokeloshe/vuurwerk-firmware/latest/total?label=downloads%20(latest)&color=success)](https://github.com/Tokeloshe/vuurwerk-firmware/releases/latest)
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-Tokeloshe-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/Tokeloshe)
+[![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-%245-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/Tokeloshe)
 
 ---
 
@@ -349,6 +349,15 @@ Chrome is required (the Web Serial API doesn't work in Firefox or Safari).
 Your channels and settings are preserved; only the firmware changes. Full
 details and troubleshooting: [FLASHING.md](FLASHING.md).
 
+<p align="center">
+  <br>
+  <img src="assets/icon-coffee.svg" width="28" alt=""><br>
+  <b>Flashed it? Heard your first voice on PATROL?</b><br>
+  If VUURWERK has earned a place on your belt, a coffee ($5) is the nicest way to say so.<br><br>
+  <a href="https://buymeacoffee.com/Tokeloshe"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="48"></a>
+  <br><br>
+</p>
+
 ---
 
 ## Hardware Compatibility
@@ -380,26 +389,39 @@ the complete list of VUURWERK-original contributions.
 
 ## Support VUURWERK
 
-VUURWERK is free and built nights and weekends by one operator on a $30
-radio. If PATROL found you a conversation, or F+EXIT rescued a deaf VFO,
-you can keep the bench powered and keep going on this:
+I make VUURWERK in the evenings and on weekends, and it stays free. Hundreds of
+you have downloaded it; so far not one coffee has come back. If it has earned
+a place on your belt, a coffee ($5) is the nicest way to say so, and every one
+goes straight back into the radio:
 
-<p align="center">
-  <a href="https://buymeacoffee.com/Tokeloshe">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="60">
-  </a>
-</p>
+- **Test radios.** Every "does it work on the V2 / V3 / K6?" needs that radio on
+  the bench. A UV-K5 is $30; a coffee is a sixth of one.
+- **Bench kit.** A dummy load, an SDR and a bench supply are what make a release
+  safe to flash. The transmit-safety fixes in v1.5.1 came out of exactly that.
+- **The evenings** that turn your bug reports and feature requests into
+  firmware.
 
-<p align="center">
-  <a href="https://buymeacoffee.com/Tokeloshe">
-    <img src="buymeacoffee/qr-code.png" alt="Buy Me a Coffee QR code" width="160">
-  </a>
-  <br>
-  <em>Reading this on a desktop? Scan with your phone.</em>
-</p>
+<table align="center">
+<tr>
+<td align="center" valign="middle" width="56%">
+<br>
+<a href="https://buymeacoffee.com/Tokeloshe"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="60"></a>
+<br><br>
+<sub>About a minute. Any card, no account needed.</sub>
+<br><br>
+</td>
+<td align="center" valign="middle" width="44%">
+<br>
+<a href="https://buymeacoffee.com/Tokeloshe"><img src="buymeacoffee/qr-code.png" alt="Buy Me a Coffee QR code" width="160"></a>
+<br>
+<sub>Reading this at the bench? Scan with your phone</sub>
+<br><br>
+</td>
+</tr>
+</table>
 
-Prefer crypto, or want to help without spending a cent? See
-[DONATE.md](DONATE.md) for XRP and the free ways to support the project.
+Can't right now? A star on this page or a clear bug report helps just as much.
+XRP and the other ways are in [DONATE.md](DONATE.md).
 
 ---
 

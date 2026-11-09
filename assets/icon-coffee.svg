@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- VUURWERK asset. Copyright (c) 2026 James Honiball (KC3TFZ). A cup of coffee. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <title>A cup of coffee</title>
+  <g fill="none" stroke="#F5970E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 18h26v10a9 9 0 0 1-9 9h-8a9 9 0 0 1-9-9z"/>
+    <path d="M34 21h3a4 4 0 0 1 0 8h-3"/>
+    <path d="M15 6c0 3-3 3-3 6M21 6c0 3-3 3-3 6M27 6c0 3-3 3-3 6"/>
+    <path d="M10 42h22"/>
+  </g>
+</svg>

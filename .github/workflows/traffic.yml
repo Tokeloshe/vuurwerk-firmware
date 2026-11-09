@@ -1,0 +1,37 @@
+name: Save traffic history
+
+# GitHub keeps views and clones for 14 days only. This job runs daily in the dev repo,
+# reads the traffic of the public repo (and of this one), and appends the numbers to
+# CSV files under docs/traffic/, which the publish script never copies to the public repo.
+# Needs one secret in this repo: TRAFFIC_TOKEN, a fine-grained personal access token with
+# read-only "Administration" permission on Tokeloshe/vuurwerk-firmware.
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  save:
+    if: github.repository == 'Tokeloshe/vuurwerk-dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect traffic and release downloads
+        env:
+          PUBLIC_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
+          DEV_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 docs/traffic/collect.py
+
+      - name: Commit the history
+        run: |
+          git config user.name "traffic-bot"
+          git config user.email "traffic-bot@users.noreply.github.com"
+          git add docs/traffic/*.csv
+          git diff --cached --quiet && echo "nothing new" && exit 0
+          git commit -m "traffic: $(date -u +%Y-%m-%d)"
+          git push
